@@ -1,0 +1,79 @@
+COMMIT_MSG.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# uv
+.uv/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Type checking and linting
+.mypy_cache/
+.dmypy.json
+.pyright/
+.ruff_cache/
+
+# Build and distribution
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE
+.idea/
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+.tmp/
+temp/
+tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Project data and local storage
+data/
+storage/
+minio-data/
+postgres-data/
+
+# Airflow
+airflow/logs/
+airflow/airflow.cfg
+airflow/webserver_config.py
+
+# Generated files
+*.parquet
+*.duckdb
+*.db
