@@ -205,7 +205,7 @@
 - область указывается в круглых скобках;
 - после двоеточия ставится пробел;
 - описание не должно быть пустым;
-- длина заголовка не превышает 72 символа;
+- ~~длина заголовка не превышает 72 символа;~~
 - для несовместимых изменений используется `!` после области.
 
 ## 9. Проверка коммитов с помощью хуков
@@ -216,7 +216,7 @@
 - допустимый тип;
 - наличие области;
 - формат заголовка;
-- длину не более 72 символов.
+- ~~длину не более 72 символов.~~
 
 Хуки подключаются только к конкретному проекту.
 
@@ -240,11 +240,38 @@ $HOME\.git-hooks\
 
 ### Подключение хуков
 
-Команды выполнять из корня проекта:
+check_commit_message.py
+```python
+import re
+import sys
 
+ALLOWED_TYPES = (
+    "новое|исправление|документация|стиль|переработка|ускорение|"
+    "тесты|сборка|автоматизация|прочее|откат"
+)
+HEADER_PATTERN = rf"^({ALLOWED_TYPES})\([\w-]+\)!?: .{{3,}}$"
+#MAX_HEADER_LENGTH = 72
+
+with open(sys.argv[1], encoding="utf-8") as message_file:
+    header = message_file.readline().rstrip("\r\n")
+
+if not re.match(HEADER_PATTERN, header):
+    print("Неверный заголовок коммита.")
+    print("Формат: тип(область): описание")
+    print("Пример: исправление(sql): исправить расчёт суммы заказа")
+    print("Типы: " + ", ".join(ALLOWED_TYPES.split("|")))
+    sys.exit(1)
+
+#if len(header) > MAX_HEADER_LENGTH:
+#    print(f"Заголовок длиннее {MAX_HEADER_LENGTH} символов.")
+#    sys.exit(1)
+```
+
+
+commit-msg
 ```powershell
-Copy-Item "$HOME\.git-hooks\commit-msg" ".git\hooks\commit-msg" -Force
-Copy-Item "$HOME\.git-hooks\check_commit_message.py" ".git\hooks\check_commit_message.py" -Force
+#!/bin/sh
+python "$(dirname "$0")/check_commit_message.py" "$1"
 ```
 
 ### Проверка
@@ -417,5 +444,3 @@ git fetch
 # Посмотреть удалённые ветки
 git branch -r
 ```
-
-Принудительное обновление удалённой ветки использовать осторожно, особенно если с ней работают другие разработчики.
