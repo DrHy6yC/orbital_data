@@ -443,4 +443,19 @@ git fetch
 
 # Посмотреть удалённые ветки
 git branch -r
+
+# Добавить удалённый репозиторий GitHub
+git remote add origin https://github.com/DrHy6yC/orbital_data.git
+
+# Добавить удалённый репозиторий GitLab
+git remote add gitlab https://gitlab.com/drhy6yc/orbital_data.git
+
+# Создать общий удалённый репозиторий "all" с первым адресом (GitHub)
+git remote add all https://github.com/DrHy6yC/orbital_data.git
+
+# Добавить в "all" второй адрес (GitLab)
+git remote set-url --add all https://gitlab.com/drhy6yc/orbital_data.git
+
+# Отправить ветку main сразу на GitHub и GitLab
+git push all main
 ```
