@@ -68,6 +68,9 @@ storage/
 minio-data/
 postgres-data/
 
+# Local configuration files
+AGENTS.md
+
 # Airflow
 airflow/logs/
 airflow/airflow.cfg
