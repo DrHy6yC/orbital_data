@@ -1,0 +1,58 @@
+[
+  {
+    "group": "STATIONS",
+    "format": "JSON",
+    "url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=STATIONS&FORMAT=JSON",
+    "final_url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=STATIONS&FORMAT=JSON",
+    "status": 200,
+    "content_type": "application/json; charset=UTF-8",
+    "content_length_header": "8010",
+    "last_modified": null,
+    "etag": null,
+    "size_bytes": 8010,
+    "elapsed_seconds": 1.0,
+    "received_at_utc": "2026-11-11T09:28:51.339359+00:00"
+  },
+  {
+    "group": "STATIONS",
+    "format": "CSV",
+    "url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=STATIONS&FORMAT=CSV",
+    "final_url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=STATIONS&FORMAT=CSV",
+    "status": 200,
+    "content_type": "text/plain; charset=UTF-8",
+    "content_length_header": "3088",
+    "last_modified": null,
+    "etag": null,
+    "size_bytes": 3088,
+    "elapsed_seconds": 0.89,
+    "received_at_utc": "2026-11-11T09:28:57.231952+00:00"
+  },
+  {
+    "group": "ANALYST",
+    "format": "JSON",
+    "url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=ANALYST&FORMAT=JSON",
+    "final_url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=ANALYST&FORMAT=JSON",
+    "status": 200,
+    "content_type": "application/json; charset=UTF-8",
+    "content_length_header": "233464",
+    "last_modified": null,
+    "etag": null,
+    "size_bytes": 233464,
+    "elapsed_seconds": 1.92,
+    "received_at_utc": "2026-11-11T09:29:04.157797+00:00"
+  },
+  {
+    "group": "ANALYST",
+    "format": "CSV",
+    "url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=ANALYST&FORMAT=CSV",
+    "final_url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=ANALYST&FORMAT=CSV",
+    "status": 200,
+    "content_type": "text/plain; charset=UTF-8",
+    "content_length_header": "78201",
+    "last_modified": null,
+    "etag": null,
+    "size_bytes": 78201,
+    "elapsed_seconds": 1.28,
+    "received_at_utc": "2026-11-11T09:29:10.428595+00:00"
+  }
+]
