@@ -24,7 +24,7 @@ Engineering: Python, SQL, PostgreSQL, Parquet, S3, DuckDB, dbt, Airflow.
 - **CelesTrak** — TLE и OMM, открытый доступ.
 - **Space-Track** — GP, GP_History, SATCAT, требуется регистрация.
 
-Список уточняется на этапе 2 из плана.
+Список источников [`catalog.md`](docs/data_sources/catalog.md)
 
 ## Технологический стек
 
