@@ -12,6 +12,9 @@
 
 Запуск из корня проекта:
     uv run python docs/research/celestrak/scripts/compare_formats.py
+
+Ответы, журнал запросов и отчёт сохраняются в data/celestrak/responses.
+Каталог data не входит в Git, поэтому ответы остаются локальными.
 """
 
 import csv
@@ -26,6 +29,18 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+
+def find_project_root(start: Path) -> Path:
+    """Возвращает ближайший каталог вверх по дереву с файлом pyproject.toml."""
+    for folder in (start, *start.parents):
+        if (folder / "pyproject.toml").is_file():
+            return folder
+    raise SystemExit("Не найден pyproject.toml: запускать из корня проекта")
+
+
+PROJECT_ROOT = find_project_root(Path(__file__).resolve().parent)
+OUT_DIR = PROJECT_ROOT / "data" / "celestrak" / "responses"
+
 BASE_URL = "https://celestrak.org/NORAD/elements/gp.php"
 GROUPS = ["STATIONS", "ANALYST"]
 FORMATS = ["JSON", "CSV"]
@@ -35,7 +50,6 @@ PAUSE_SECONDS = 5
 TIMEOUT_SECONDS = 60
 USER_AGENT = "orbital-data-research/0.1 (learning project)"
 ERROR_PREFIXES = ("invalid query", "no gp data found")
-OUT_DIR = Path(__file__).resolve().parent.parent / "responses"
 EXTENSIONS = {"JSON": "json", "CSV": "csv"}
 
 
