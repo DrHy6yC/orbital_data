@@ -78,3 +78,10 @@ uv sync
 ```powershell
 uv run pytest
 ```
+
+## Проверка загрузки
+
+Загрузка пяти наборов и запись снимков в `data/`:
+
+```powershell
+uv run --env-file .env python utils/check_download.py
