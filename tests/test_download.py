@@ -1,10 +1,16 @@
+import re
 from collections.abc import Callable
+from pathlib import Path
 
 import httpx
 import pytest
 
 from orbital_data.collectors.celestrak import CelesTrakClient
-from orbital_data.collectors.download import download_datasets
+from orbital_data.collectors.download import (
+    current_timestamp,
+    download_datasets,
+    make_dataset_path,
+)
 from orbital_data.collectors.space_track import SpaceTrackClient
 
 CSV_BODY = b"OBJECT_NAME,OBJECT_ID\nISS (ZARYA),1998-067A\n"
@@ -32,7 +38,7 @@ def make_clients(
     return celestrak, space_track
 
 
-def test_downloads_five_datasets_in_order() -> None:
+def test_downloads_and_saves_five_datasets(tmp_path: Path) -> None:
     calls: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -46,17 +52,15 @@ def test_downloads_five_datasets_in_order() -> None:
         return httpx.Response(200, content=JSON_BODY)
 
     celestrak, space_track = make_clients(handler)
-    result = download_datasets(celestrak, space_track)
+    result = download_datasets(celestrak, space_track, tmp_path)
 
     assert list(result.datasets) == [
-        "celestrak_stations",
-        "celestrak_active",
-        "space_track_gp",
-        "space_track_satcat",
-        "space_track_decay",
+        "celestrak/gp_stations",
+        "celestrak/gp_active",
+        "space_track/gp",
+        "space_track/satcat",
+        "space_track/decay",
     ]
-    assert result.datasets["celestrak_stations"] == CSV_BODY
-    assert result.datasets["space_track_decay"] == JSON_BODY
     assert result.errors == {}
     assert calls == [
         "STATIONS",
@@ -66,9 +70,17 @@ def test_downloads_five_datasets_in_order() -> None:
         f"{QUERY_PREFIX}/satcat/format/json",
         f"{QUERY_PREFIX}/decay/format/json",
     ]
+    stations_file = result.datasets["celestrak/gp_stations"]
+    assert stations_file.parent.name == "gp_stations"
+    assert stations_file.parent.parent.name == "celestrak"
+    assert stations_file.suffix == ".csv"
+    assert stations_file.read_bytes() == CSV_BODY
+    decay_file = result.datasets["space_track/decay"]
+    assert decay_file.suffix == ".json"
+    assert decay_file.read_bytes() == JSON_BODY
 
 
-def test_keeps_space_track_when_celestrak_fails() -> None:
+def test_keeps_space_track_when_celestrak_fails(tmp_path: Path) -> None:
     calls: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -85,27 +97,22 @@ def test_keeps_space_track_when_celestrak_fails() -> None:
         return httpx.Response(200, content=JSON_BODY)
 
     celestrak, space_track = make_clients(handler)
-    result = download_datasets(celestrak, space_track)
+    result = download_datasets(celestrak, space_track, tmp_path)
 
     assert list(result.datasets) == [
-        "celestrak_stations",
-        "space_track_gp",
-        "space_track_satcat",
-        "space_track_decay",
+        "celestrak/gp_stations",
+        "space_track/gp",
+        "space_track/satcat",
+        "space_track/decay",
     ]
     assert list(result.errors) == ["celestrak"]
     assert "403" in result.errors["celestrak"]
-    assert calls == [
-        "STATIONS",
-        "ACTIVE",
-        "login",
-        f"{QUERY_PREFIX}/gp/format/json",
-        f"{QUERY_PREFIX}/satcat/format/json",
-        f"{QUERY_PREFIX}/decay/format/json",
-    ]
+    stations_file = result.datasets["celestrak/gp_stations"]
+    assert stations_file.read_bytes() == CSV_BODY
+    assert not (tmp_path / "celestrak" / "gp_active").exists()
 
 
-def test_keeps_celestrak_when_space_track_fails() -> None:
+def test_keeps_celestrak_when_space_track_fails(tmp_path: Path) -> None:
     calls: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -120,14 +127,30 @@ def test_keeps_celestrak_when_space_track_fails() -> None:
         return httpx.Response(200, content=JSON_BODY)
 
     celestrak, space_track = make_clients(handler)
-    result = download_datasets(celestrak, space_track)
+    result = download_datasets(celestrak, space_track, tmp_path)
 
     assert list(result.datasets) == [
-        "celestrak_stations",
-        "celestrak_active",
-        "space_track_gp",
+        "celestrak/gp_stations",
+        "celestrak/gp_active",
+        "space_track/gp",
     ]
     assert list(result.errors) == ["space_track"]
-    assert not any(
-        path.endswith("/decay/format/json") for path in calls
+    assert not (tmp_path / "space_track" / "decay").exists()
+
+
+def test_builds_path_from_timestamp(tmp_path: Path) -> None:
+    file_path = make_dataset_path(
+        tmp_path, "space_track/gp", "json", "2026-11-15T10-10-00Z"
+    )
+
+    assert file_path == (
+        tmp_path / "space_track" / "gp" / "2026-11-15T10-10-00Z.json"
+    )
+
+
+def test_timestamp_has_no_colons() -> None:
+    timestamp = current_timestamp()
+
+    assert re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z", timestamp
     )
