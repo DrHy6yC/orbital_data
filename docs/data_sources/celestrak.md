@@ -33,6 +33,8 @@ https://celestrak.org/NORAD/elements/gp.php?GROUP=STATIONS&FORMAT=JSON
 
 ### 2.1. Группы GP
 
+Список проверен по странице `celestrak.org/NORAD/elements/` 2026-11-15.
+
 **Общие группы**
 
 | GROUP | Название |
@@ -62,6 +64,7 @@ https://celestrak.org/NORAD/elements/gp.php?GROUP=STATIONS&FORMAT=JSON
 | `resource` | Спутники исследования природных ресурсов |
 | `sar` | Спутники радиолокационного наблюдения |
 | `sarsat` | Поиск и спасение |
+| `dmc` | Мониторинг стихийных бедствий |
 | `tdrss` | Система ретрансляции данных TDRSS |
 | `argos` | Система сбора данных ARGOS |
 | `planet` | Спутники Planet |
@@ -72,7 +75,6 @@ https://celestrak.org/NORAD/elements/gp.php?GROUP=STATIONS&FORMAT=JSON
 | GROUP | Название |
 |---|---|
 | `geo` | Геостационарные спутники |
-| `movers` | Перемещающиеся геостационарные объекты |
 | `intelsat` | Спутники Intelsat |
 | `ses` | Спутники SES |
 | `eutelsat` | Спутники Eutelsat |
@@ -87,8 +89,12 @@ https://celestrak.org/NORAD/elements/gp.php?GROUP=STATIONS&FORMAT=JSON
 | `globalstar` | Спутники Globalstar |
 | `amateur` | Любительские радиоспутники |
 | `satnogs` | Спутники SatNOGS |
-| `experimental` | Экспериментальные коммуникационные спутники |
+| `x-comm` | Экспериментальные коммуникационные спутники |
 | `other-comm` | Другие коммуникационные спутники |
+
+Перемещающиеся геостационарные объекты не образуют отдельную группу
+`gp.php`: они входят в `geo` и показываются отдельной таблицей
+`table-geo.php?MOVERS`.
 
 **Навигационные спутники**
 
@@ -114,7 +120,6 @@ https://celestrak.org/NORAD/elements/gp.php?GROUP=STATIONS&FORMAT=JSON
 
 | GROUP | Название |
 |---|---|
-| `other` | Прочие спутники |
 | `military` | Военные спутники |
 | `radar` | Радиолокационные калибровочные спутники |
 | `cubesat` | CubeSat |
