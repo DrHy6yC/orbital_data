@@ -52,9 +52,12 @@ Engineering: Python, SQL, PostgreSQL, Parquet, S3, DuckDB, dbt, Airflow.
     orbital_data/
     ├── src/orbital_data/        код платформы
     ├── tests/                   тесты
+    ├── docs/                    документация по источникам
+    ├── utils/                   вспомогательные скрипты
     ├── PLAN.md                  план этапов
     ├── BACKLOG.md               активные задачи
     ├── COMMIT_RULES.md          правила коммитов
+    ├── NOTES.md                 рабочие заметки
     └── README.md                описание проекта
 
 ## Требования

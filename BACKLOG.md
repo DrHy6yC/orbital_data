@@ -37,8 +37,7 @@
 
 ## Сопутствующие задачи
 
-- `utils/compare_formats.py`: исправить в докстринге путь запуска на
-  `uv run python utils/compare_formats.py`.
-- `README.md`: добавить в структуру проекта `docs/`, `utils/`, `NOTES.md`.
-- `docs/data_sources/celestrak.md`: проверить группу `special-interest` —
-  запрос `gp.php` с этой группой вернул `not found`.
+- `docs/data_sources/celestrak.md`: сверить названия групп GP с текущим
+  списком на `celestrak.org/NORAD/elements/`. В таблице указаны `movers`,
+  `experimental` и `other`, которых в списке нет, а `dmc` и `x-comm`
+  в таблице отсутствуют.
