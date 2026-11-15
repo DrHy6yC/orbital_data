@@ -125,6 +125,16 @@ Copy-Item .env.example .env
 В `.env` два параметра: `SPACETRACK_USER` и `SPACETRACK_PASSWORD`.
 Для CelesTrak учётные данные не нужны: доступ открытый.
 
+### База метаданных
+
+PostgreSQL работает в Docker, данные лежат в `postgres-data/` и в Git
+не попадают.
+
+```powershell
+docker compose up -d postgres
+docker compose ps
+```
+
 ### Команды запуска
 
 Все команды выполняются из корня проекта.
