@@ -13,7 +13,7 @@
 Запуск из корня проекта:
     uv run python utils/compare_formats.py
 
-Ответы, журнал запросов и отчёт сохраняются в data/celestrak/responses.
+Ответы, журнал запросов и отчёт сохраняются в data/research/celestrak.
 Каталог data не входит в Git, поэтому ответы остаются локальными.
 """
 
@@ -38,7 +38,7 @@ def find_project_root(start: Path) -> Path:
 
 
 PROJECT_ROOT = find_project_root(Path(__file__).resolve().parent)
-OUT_DIR = PROJECT_ROOT / "data" / "celestrak" / "responses"
+OUT_DIR = PROJECT_ROOT / "data" / "research" / "celestrak"
 
 BASE_URL = "https://celestrak.org/NORAD/elements/gp.php"
 GROUPS = ["STATIONS", "ANALYST"]
