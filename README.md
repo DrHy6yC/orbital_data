@@ -29,6 +29,7 @@ Engineering: Python, SQL, PostgreSQL, Parquet, S3, DuckDB, dbt, Airflow.
 ## Технологический стек
 
 - **Python 3.12+** — основной язык разработки.
+- **httpx** — HTTP-клиент для загрузки данных из источников.
 - **uv** — управление зависимостями и окружением.
 - **FastAPI** — REST API.
 - **PostgreSQL** — метаданные и операционная информация.
