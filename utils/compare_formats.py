@@ -25,9 +25,8 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+
+import httpx
 
 
 def find_project_root(start: Path) -> Path:
@@ -55,32 +54,30 @@ EXTENSIONS = {"JSON": "json", "CSV": "csv"}
 
 def fetch(group: str, fmt: str) -> dict:
     """Выполняет один запрос и возвращает сведения об ответе вместе с телом."""
-    url = f"{BASE_URL}?{urlencode({'GROUP': group, 'FORMAT': fmt})}"
-    request = Request(url, headers={"User-Agent": USER_AGENT})
     started = time.monotonic()
     try:
-        with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-            status, final_url = response.status, response.geturl()
-            headers, body = dict(response.headers.items()), response.read()
-    except HTTPError as error:
-        status, final_url = error.code, error.url
-        headers, body = dict(error.headers.items()), error.read()
-    except URLError as error:
-        raise SystemExit(f"Сетевая ошибка для {url}: {error.reason}")
+        with httpx.Client(
+            headers={"User-Agent": USER_AGENT},
+            timeout=TIMEOUT_SECONDS,
+            follow_redirects=False,
+        ) as client:
+            response = client.get(BASE_URL, params={"GROUP": group, "FORMAT": fmt})
+    except httpx.HTTPError as error:
+        raise SystemExit(f"Сетевая ошибка для {BASE_URL}: {error!r}")
     return {
         "group": group,
         "format": fmt,
-        "url": url,
-        "final_url": final_url,
-        "status": status,
-        "content_type": headers.get("Content-Type"),
-        "content_length_header": headers.get("Content-Length"),
-        "last_modified": headers.get("Last-Modified"),
-        "etag": headers.get("ETag"),
-        "size_bytes": len(body),
+        "url": str(response.request.url),
+        "final_url": str(response.url),
+        "status": response.status_code,
+        "content_type": response.headers.get("Content-Type"),
+        "content_length_header": response.headers.get("Content-Length"),
+        "last_modified": response.headers.get("Last-Modified"),
+        "etag": response.headers.get("ETag"),
+        "size_bytes": len(response.content),
         "elapsed_seconds": round(time.monotonic() - started, 2),
         "received_at_utc": datetime.now(timezone.utc).isoformat(),
-        "body": body,
+        "body": response.content,
     }
 
 
