@@ -7,7 +7,7 @@
 
 ### 3.4. Сохранение исходных данных
 
-**Файл и место:** `src/orbital_data/storage/save.py` (новый модуль),
+**Файл и место:** `src/orbital_data/source_snapshots/save.py` (новый модуль),
 `src/orbital_data/collectors/download.py`, `utils/check_download.py`,
 `tests/test_save.py`, `tests/test_download.py`.
 
@@ -27,7 +27,9 @@
 - исходный формат не меняется: CSV для CelesTrak, JSON для Space-Track;
 - при отказе источника уже сохранённые наборы остаются, ошибка попадает
   в `errors`;
-- `data/` не входит в Git.
+- `data/` не входит в Git;
+- пакет называется `source_snapshots`, а не `storage`: шаблон `storage/`
+  в `.gitignore` скрывает папку с таким именем на любой глубине.
 
 **Ожидаемый результат:** после прогона в каждом каталоге лежит один файл
 с исходным ответом.
@@ -40,3 +42,13 @@
 - живой прогон выполняется командой
   `uv run --env-file .env python utils/check_download.py`, после чего
   проверяются каталоги `data/`.
+
+## Сопутствующие задачи
+
+- `tests/test_download.py`: добавить проверки `make_dataset_path`
+  и `current_timestamp` — сборка пути набора и формат имени файла.
+- `utils/compare_formats.py`, `docs/data_sources/datasets.md`: перенести
+  исследовательские файлы в `data/research/<источник>/` и записать это
+  правило, чтобы снимки источников не смешивались с файлами исследований.
+- `README.md`: добавить раздел о проверке загрузки и о расположении
+  файлов в `data/`.
