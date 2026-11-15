@@ -1,6 +1,6 @@
 # Local configuration files
 AGENTS.md
-COMMIT_MSG.txt
+AGENTS_MSG.txt
 
 # Python
 __pycache__/
