@@ -5,32 +5,6 @@
 
 ## Активная задача
 
-### 3.1. Реализация подключения к источникам
-
-**Файл и место:** `src/orbital_data/collectors/` (`celestrak.py`,
-`space_track.py`, `errors.py`), `utils/check_connection.py`.
-
-**Что нужно сделать:** проверить клиенты на реальных запросах к источникам
-и зафиксировать результат.
-
-**Учесть:**
-- CelesTrak: любой ответ, кроме HTTP 200, останавливает запросы без повторов;
-- Space-Track: тайм-ауты, 429 с `Retry-After`, 5xx с ограниченным числом
-  повторов, остановка при 403;
-- учётные данные Space-Track из переменных окружения `SPACETRACK_USER`
-  и `SPACETRACK_PASSWORD`, файл `.env` в Git не попадает.
-
-**Ожидаемый результат:** оба источника доступны через программный интерфейс.
-
-**Как проверить:** выполнить
-`uv run --env-file .env python utils/check_connection.py` и получить размер
-ответа от каждого источника.
-
-## Сопутствующие задачи
-
-- `utils/compare_formats.py`: исправить в докстринге путь запуска на
-  `uv run python utils/compare_formats.py`.
-- `README.md`: добавить в структуру проекта `docs/`, `utils/`, `NOTES.md`.
 ### 3.2. Реализация загрузки
 
 **Файл и место:** `src/orbital_data/collectors/download.py` (новый модуль),
@@ -57,3 +31,11 @@
   наборов, остановка при ошибке источника;
 - живой прогон по одному набору за запуск: CelesTrak — не чаще раза
   в 2 часа, Space-Track — не чаще раза в час.
+
+## Сопутствующие задачи
+
+- `utils/compare_formats.py`: исправить в докстринге путь запуска на
+  `uv run python utils/compare_formats.py`.
+- `README.md`: добавить в структуру проекта `docs/`, `utils/`, `NOTES.md`.
+- `docs/data_sources/celestrak.md`: проверить группу `special-interest` —
+  запрос `gp.php` с этой группой вернул `not found`.
