@@ -11,7 +11,7 @@
   скрипт немедленно останавливается и ничего не повторяет.
 
 Запуск из корня проекта:
-    uv run python docs/research/celestrak/scripts/compare_formats.py
+    uv run python utils/compare_formats.py
 
 Ответы, журнал запросов и отчёт сохраняются в data/celestrak/responses.
 Каталог data не входит в Git, поэтому ответы остаются локальными.
