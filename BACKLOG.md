@@ -35,9 +35,3 @@
 - живой прогон выполняется командой
   `uv run --env-file .env python utils/check_download.py`.
 
-## Сопутствующие задачи
-
-- `docs/data_sources/celestrak.md`: сверить названия групп GP с текущим
-  списком на `celestrak.org/NORAD/elements/`. В таблице указаны `movers`,
-  `experimental` и `other`, которых в списке нет, а `dmc` и `x-comm`
-  в таблице отсутствуют.
