@@ -24,7 +24,8 @@
 Запланировано:
 
 - **PostgreSQL** — метаданные и операционная информация.
-- **MinIO (S3)** — хранение исходных данных.
+- **Rustfs** — хранение исходных данных.
+- **MinIO (S3)** — хранение исходных данных(дублирование).
 - **Parquet / PyArrow** — аналитическое хранение.
 - **DuckDB / dbt** — аналитическая обработка.
 - **Apache Airflow** — оркестрация процессов.
@@ -133,6 +134,18 @@ PostgreSQL работает в Docker, данные лежат в `postgres-data
 ```powershell
 docker compose up -d postgres
 docker compose ps
+```
+### Установка и запуск Minio (локально)
+Установка [`MINIO_INSTALL_LOCAL.md`](MINIO_INSTALL_LOCAL.md)
+```powershell
+# Запуск win
+New-Item utils\run_minio.ps1 -ItemType File
+
+# Linux и macOS
+touch utils/run_minio.sh
+chmod +x utils/run_minio.sh
+
+./utils/run_minio.sh
 ```
 
 ### Команды запуска
