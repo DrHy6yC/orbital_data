@@ -22,15 +22,15 @@ services:
     image: rustfs/rustfs:1.0.4
     restart: unless-stopped
     environment:
-      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
-      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY}
+      RUSTFS_ACCESS_KEY: ${S3_RUSTFS_ACCESS_KEY:?задайте S3_RUSTFS_ACCESS_KEY в .env}
+      RUSTFS_SECRET_KEY: ${S3_RUSTFS_SECRET_KEY:?задайте S3_RUSTFS_SECRET_KEY в .env}
       RUSTFS_VOLUMES: /data
       RUSTFS_ADDRESS: ":9000"
       RUSTFS_CONSOLE_ADDRESS: ":9001"
       RUSTFS_CONSOLE_ENABLE: "true"
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - "127.0.0.1:${S3_RUSTFS_PORT:?задайте S3_RUSTFS_PORT в .env}:9000"
+      - "127.0.0.1:${S3_RUSTFS_CONSOLE_PORT:?задайте S3_RUSTFS_CONSOLE_PORT в .env}:9001"
     volumes:
       - s3-data:/data
     healthcheck:
