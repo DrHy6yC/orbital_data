@@ -23,7 +23,7 @@ import json
 import sys
 import time
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -43,7 +43,12 @@ OUT_DIR = PROJECT_ROOT / "data" / "research" / "celestrak"
 BASE_URL = "https://celestrak.org/NORAD/elements/gp.php"
 GROUPS = ["STATIONS", "ANALYST"]
 FORMATS = ["JSON", "CSV"]
-CONSTANT_FIELDS = ["CENTER_NAME", "REF_FRAME", "TIME_SYSTEM", "MEAN_ELEMENT_THEORY"]
+CONSTANT_FIELDS = [
+    "CENTER_NAME",
+    "REF_FRAME",
+    "TIME_SYSTEM",
+    "MEAN_ELEMENT_THEORY",
+]
 LONG_NUMBER_LIMIT = 100000
 PAUSE_SECONDS = 5
 TIMEOUT_SECONDS = 60
@@ -61,9 +66,13 @@ def fetch(group: str, fmt: str) -> dict:
             timeout=TIMEOUT_SECONDS,
             follow_redirects=False,
         ) as client:
-            response = client.get(BASE_URL, params={"GROUP": group, "FORMAT": fmt})
+            response = client.get(
+                BASE_URL, params={"GROUP": group, "FORMAT": fmt}
+            )
     except httpx.HTTPError as error:
-        raise SystemExit(f"Сетевая ошибка для {BASE_URL}: {error!r}")
+        raise SystemExit(
+            f"Сетевая ошибка для {BASE_URL}: {error!r}"
+        ) from error
     return {
         "group": group,
         "format": fmt,
@@ -76,7 +85,7 @@ def fetch(group: str, fmt: str) -> dict:
         "etag": response.headers.get("ETag"),
         "size_bytes": len(response.content),
         "elapsed_seconds": round(time.monotonic() - started, 2),
-        "received_at_utc": datetime.now(timezone.utc).isoformat(),
+        "received_at_utc": datetime.now(UTC).isoformat(),
         "body": response.content,
     }
 
@@ -87,7 +96,9 @@ def problem_with(record: dict) -> str | None:
         return f"HTTP {record['status']}"
     if record["final_url"] != record["url"]:
         return f"перенаправление на {record['final_url']}"
-    head = record["body"][:200].decode("utf-8", errors="replace").strip().lower()
+    head = (
+        record["body"][:200].decode("utf-8", errors="replace").strip().lower()
+    )
     if not head:
         return "пустое тело ответа"
     if head.startswith(ERROR_PREFIXES):
@@ -97,7 +108,9 @@ def problem_with(record: dict) -> str | None:
 
 def parse_json(body: bytes) -> list[dict]:
     data = json.loads(body.decode("utf-8"))
-    if not isinstance(data, list) or not all(isinstance(row, dict) for row in data):
+    if not isinstance(data, list) or not all(
+        isinstance(row, dict) for row in data
+    ):
         raise ValueError("JSON не является списком объектов")
     return data
 
@@ -136,9 +149,13 @@ def index_by_id(rows: list[dict]) -> tuple[dict, int]:
 def compare(group, json_record, csv_record) -> list[str]:
     json_rows = parse_json(json_record["body"])
     csv_fields, csv_rows = parse_csv(csv_record["body"])
-    json_keys = set().union(*(row.keys() for row in json_rows)) if json_rows else set()
+    json_keys = (
+        set().union(*(row.keys() for row in json_rows)) if json_rows else set()
+    )
     in_every_json = (
-        set.intersection(*(set(row.keys()) for row in json_rows)) if json_rows else set()
+        set.intersection(*(set(row.keys()) for row in json_rows))
+        if json_rows
+        else set()
     )
     csv_keys = set(csv_fields)
 
@@ -157,9 +174,16 @@ def compare(group, json_record, csv_record) -> list[str]:
         "",
     ]
 
-    lines += ["### Постоянные поля OMM", "", "| Поле | Есть в JSON | Есть в CSV |", "|---|---|---|"]
+    lines += [
+        "### Постоянные поля OMM",
+        "",
+        "| Поле | Есть в JSON | Есть в CSV |",
+        "|---|---|---|",
+    ]
     for field in CONSTANT_FIELDS:
-        lines.append(f"| {field} | {field in json_keys} | {field in csv_keys} |")
+        lines.append(
+            f"| {field} | {field in json_keys} | {field in csv_keys} |"
+        )
     lines.append("")
 
     lines += ["### Состав полей", ""]
@@ -171,7 +195,12 @@ def compare(group, json_record, csv_record) -> list[str]:
     lines.append(f"- Порядок полей в CSV: {csv_fields}")
     lines.append("")
 
-    lines += ["### Типы значений в JSON", "", "| Поле | Типы (число записей) |", "|---|---|"]
+    lines += [
+        "### Типы значений в JSON",
+        "",
+        "| Поле | Типы (число записей) |",
+        "|---|---|",
+    ]
     for field in sorted(json_keys):
         types = Counter(
             type(row[field]).__name__ if field in row else "отсутствует"
@@ -180,10 +209,13 @@ def compare(group, json_record, csv_record) -> list[str]:
         lines.append(f"| {field} | {dict(types)} |")
     lines.append("")
 
-    empty_csv = {f: sum(1 for r in csv_rows if r.get(f, "") == "") for f in csv_fields}
+    empty_csv = {
+        f: sum(1 for r in csv_rows if r.get(f, "") == "") for f in csv_fields
+    }
     empty_csv = {f: n for f, n in empty_csv.items() if n}
     null_json = {
-        f: sum(1 for r in json_rows if r.get(f) is None) for f in sorted(json_keys)
+        f: sum(1 for r in json_rows if r.get(f) is None)
+        for f in sorted(json_keys)
     }
     null_json = {f: n for f, n in null_json.items() if n}
     lines += [
@@ -224,7 +256,9 @@ def compare(group, json_record, csv_record) -> list[str]:
         for field in csv_keys & set(json_index[key].keys()):
             compared += 1
             if not same_value(json_index[key][field], csv_index[key][field]):
-                mismatches.append((key, field, json_index[key][field], csv_index[key][field]))
+                mismatches.append(
+                    (key, field, json_index[key][field], csv_index[key][field])
+                )
     lines += [
         "### Сравнение значений",
         "",
@@ -249,7 +283,7 @@ def compare(group, json_record, csv_record) -> list[str]:
 
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     records: dict[tuple[str, str], dict] = {}
     log: list[dict] = []
 
@@ -261,20 +295,34 @@ def main() -> None:
             first = False
             record = fetch(group, fmt)
             log.append({k: v for k, v in record.items() if k != "body"})
-            name = f"gp_{group.lower()}_{fmt.lower()}_{stamp}.{EXTENSIONS[fmt]}"
+            name = (
+                f"gp_{group.lower()}_{fmt.lower()}_{stamp}.{EXTENSIONS[fmt]}"
+            )
             (OUT_DIR / name).write_bytes(record["body"])
             problem = problem_with(record)
-            print(f"{group} {fmt}: HTTP {record['status']}, {record['size_bytes']} байт")
+            print(
+                f"{group} {fmt}: HTTP {record['status']}, {record['size_bytes']} байт"
+            )
             if problem:
                 (OUT_DIR / f"requests_log_{stamp}.json").write_text(
-                    json.dumps(log, ensure_ascii=False, indent=2), encoding="utf-8"
+                    json.dumps(log, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
                 )
-                sys.exit(f"Остановка: {problem}. Запросы прекращены, повторов нет.")
+                sys.exit(
+                    f"Остановка: {problem}. Запросы прекращены, повторов нет."
+                )
             records[(group, fmt)] = record
 
-    report = ["# Сверка форматов GP: JSON и CSV", "", f"Время запуска (UTC): {stamp}", ""]
+    report = [
+        "# Сверка форматов GP: JSON и CSV",
+        "",
+        f"Время запуска (UTC): {stamp}",
+        "",
+    ]
     for group in GROUPS:
-        report += compare(group, records[(group, "JSON")], records[(group, "CSV")])
+        report += compare(
+            group, records[(group, "JSON")], records[(group, "CSV")]
+        )
 
     (OUT_DIR / f"requests_log_{stamp}.json").write_text(
         json.dumps(log, ensure_ascii=False, indent=2), encoding="utf-8"
