@@ -5,44 +5,58 @@
 
 ## Активные задачи
 
-### 4.0.3. Применение SQL-файлов без потери кириллицы
+### 4.0.3. Загрузчик SQL-файлов без потери кириллицы
 
-**Файл и место:** `README.md`, раздел «PostgreSQL и RustFS (Docker)»;
+**Файл и место:** `utils/apply_sql.py` (новый), `.env.example`,
+`README.md`, `pyproject.toml` (зависимость `psycopg`),
 `sql/001_schema.sql`, `sql/002_seed.sql`.
 
 **Что нужно сделать:** при применении справочника русские названия
 наборов попали в `orbital.datasets` знаками вопроса. Причина —
-передача файла в `psql` через конвейер PowerShell
-(`Get-Content sql\002_seed.sql | docker compose exec ...`): консоль
-заменяет символы вне своей кодовой страницы на `?`. Сам файл в
-репозитории испорчен не был: он в UTF-8, портится именно передача.
+передача файла в `psql` через конвейер PowerShell: консоль заменяет
+символы вне своей кодовой страницы на `?`. Файлы в репозитории в
+UTF-8, портилась именно передача.
 
 Нужно:
 
-- передавать файл в контейнер без перекодирования: скопировать его
-  (`docker compose cp sql\002_seed.sql postgres:/tmp/002_seed.sql`)
-  и выполнить `psql -f /tmp/002_seed.sql` внутри контейнера;
-- добавить в начало `sql/001_schema.sql` и `sql/002_seed.sql` строку
-  `SET client_encoding = 'UTF8';`;
-- на устройстве с Windows таблица `orbital.datasets` сейчас
-  отсутствует: `\dt orbital.*` показывает только `sources`, `runs`
-  и `snapshots`. Применить схему заново и заполнить справочник;
-- записать в `README.md` команды для Windows и для macOS: на macOS
-  PowerShell не нужен, там работает обычное перенаправление ввода.
+- поставить зависимость `uv add "psycopg[binary]"`: готовое колесо
+  с `libpq` внутри, работает на Windows, macOS и Linux;
+- `utils/apply_sql.py`: читает файлы как UTF-8 (`utf-8-sig`, чтобы
+  не мешал BOM), применяет по порядку в одной транзакции, принимает
+  и отдельные файлы, и каталог (из каталога берёт `*.sql` по
+  алфавиту), пустой файл пропускает;
+- в `.env.example` добавить `POSTGRES_HOST=localhost` и
+  `POSTGRES_PORT=5432`;
+- в `README.md` новый раздел «Схема и справочники»: команда для
+  каталога, команда для одного файла, пересоздание схемы и
+  объяснение, почему не через `Get-Content | psql`;
+- на устройстве с Windows таблица `orbital.datasets` отсутствует:
+  удалить схему и применить файлы загрузчиком.
 
-**Учесть:** повторное применение `sql/001_schema.sql` на уже
-существующей схеме упадёт на `CREATE TABLE`; на рабочей базе
-достаточно создать только отсутствующую таблицу либо применить
-схему к пустой базе.
+**Учесть:**
 
-**Ожидаемый результат:** в `orbital.datasets` русские названия
-читаются целиком, знаков `?` нет; команда из `README.md` на чистой
-базе даёт тот же результат.
+- `sql/001_schema.sql` не идемпотентен: на существующей схеме он
+  упадёт на `CREATE TABLE`, поэтому повторно применяется только к
+  пустой базе;
+- `sql/002_seed.sql` идемпотентен за счёт `ON CONFLICT DO NOTHING`;
+- метакоманды `psql` (`\dt`, `\d`) в загрузчике недоступны, для них
+  остаётся `docker compose exec`;
+- кириллица в выводе `psql` через PowerShell отображается
+  некорректно, проверять в DBeaver или после `chcp 65001`.
+
+**Ожидаемый результат:** в `orbital.datasets` пять строк с русскими
+названиями без знаков `?`; одна и та же команда работает на Windows
+и на macOS.
 
 **Как проверить:**
-- `docker compose exec -T postgres psql -U orbital -d orbital_data -c "SELECT code, title FROM orbital.datasets ORDER BY code;"` — пять строк с русскими названиями;
-- `docker compose exec -T postgres psql -U orbital -d orbital_data -c "SELECT count(*) FROM orbital.datasets WHERE title LIKE '%?%';"` — ноль;
-- `docker compose exec -T postgres psql -U orbital -d orbital_data -c "\dt orbital.*"` — четыре таблицы.
+
+- `uv run --env-file .env python utils/apply_sql.py sql` выводит
+  «001_schema.sql: применён» и «002_seed.sql: применён»;
+- повторный запуск `uv run --env-file .env python utils/apply_sql.py sql/002_seed.sql`
+  проходит без ошибок и не создаёт дублей;
+- `docker compose exec -T postgres psql -U orbital -d orbital_data -c "\dt orbital.*"`
+  показывает четыре таблицы;
+- в `orbital.datasets` нет строк, где `title` содержит `?`.
 
 ### 4.4. Запись снимков в Bronze RustFS
 
