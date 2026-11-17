@@ -271,12 +271,34 @@ powershell -ExecutionPolicy Bypass -File utils\run_minio.ps1
 
 ## Проверка и тестирование
 
+### Форматирование и линтинг
+
+Проверка без изменений:
+
+```bash
+uv run ruff format --check .
+uv run ruff check .
+```
+
+Форматирование и автоисправление:
+
+```bash
+uv run ruff format .
+uv run ruff check --fix .
+```
 ### Тесты
 
 ```bash
 uv run pytest
 ```
 
+### Полная проверка
+```bash
+uv run ruff format .
+uv run ruff check --fix .
+uv run ruff check .
+uv run pytest
+```
 Тесты не обращаются к сети: HTTP-клиенты работают на `httpx.MockTransport`.
 Проверяются разбор ответов, обработка ошибок и ограничений источников,
 сохранение снимков и независимость источников друг от друга.
