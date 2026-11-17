@@ -3,7 +3,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 import httpx
-import pytest
 
 from orbital_data.collectors.celestrak import CelesTrakClient
 from orbital_data.collectors.download import (
@@ -151,6 +150,4 @@ def test_builds_path_from_timestamp(tmp_path: Path) -> None:
 def test_timestamp_has_no_colons() -> None:
     timestamp = current_timestamp()
 
-    assert re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z", timestamp
-    )
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z", timestamp)

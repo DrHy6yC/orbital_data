@@ -6,7 +6,7 @@ space_track_gp занимает около 76 МБ.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from orbital_data.collectors.celestrak import CelesTrakClient
@@ -81,4 +81,4 @@ def make_dataset_path(
 
 def current_timestamp() -> str:
     """Время получения в UTC в виде, пригодном для имени файла."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")

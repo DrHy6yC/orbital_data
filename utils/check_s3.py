@@ -40,7 +40,12 @@ BUCKETS = ("bronze", "silver")
 TEST_BUCKET = "bronze"
 PREFIX = "_healthcheck/"
 MIB = 1024 * 1024
-SETTINGS = ("HOST", "PORT", "ACCESS_KEY", "SECRET_KEY")  # CONSOLE_PORT здесь не нужен
+SETTINGS = (
+    "HOST",
+    "PORT",
+    "ACCESS_KEY",
+    "SECRET_KEY",
+)  # CONSOLE_PORT здесь не нужен
 
 STEP_AUTH = "доступ по ключам"
 STEP_BUCKETS = "бакеты bronze, silver"
@@ -50,7 +55,12 @@ STEP_CLEANUP = "удаление тестовых объектов"
 STEPS = [STEP_AUTH, STEP_BUCKETS, STEP_ROUNDTRIP, STEP_MULTIPART, STEP_CLEANUP]
 
 # Ошибки, которые считаем провалом шага (а не поломкой самого скрипта).
-CHECK_ERRORS = (ClientError, BotoCoreError, S3UploadFailedError, AssertionError)
+CHECK_ERRORS = (
+    ClientError,
+    BotoCoreError,
+    S3UploadFailedError,
+    AssertionError,
+)
 
 
 def find_storages() -> list[str]:
@@ -80,7 +90,9 @@ def make_client(endpoint: str, access_key: str, secret_key: str):
     """Создаёт клиент boto3 для одного хранилища."""
     config = Config(
         signature_version="s3v4",
-        s3={"addressing_style": "path"},  # адрес вида http://host:порт/бакет/ключ
+        s3={
+            "addressing_style": "path"
+        },  # адрес вида http://host:порт/бакет/ключ
         retries={"max_attempts": 1, "mode": "standard"},
         connect_timeout=5,
         read_timeout=60,
@@ -100,7 +112,9 @@ def make_client(endpoint: str, access_key: str, secret_key: str):
 
 def check_auth(client) -> str:
     response = client.list_buckets()
-    server = response["ResponseMetadata"]["HTTPHeaders"].get("server", "не указан")
+    server = response["ResponseMetadata"]["HTTPHeaders"].get(
+        "server", "не указан"
+    )
     return f"Server: {server}, бакетов: {len(response['Buckets'])}"
 
 
@@ -119,7 +133,7 @@ def ensure_buckets(client) -> str:
 
 
 def check_roundtrip(client, key: str) -> str:
-    body = f"orbital-data check {uuid.uuid4()}".encode("utf-8")
+    body = f"orbital-data check {uuid.uuid4()}".encode()
     client.put_object(Bucket=TEST_BUCKET, Key=key, Body=body)
     head = client.head_object(Bucket=TEST_BUCKET, Key=key)
     assert head["ContentLength"] == len(body), "размер объекта не совпадает"
@@ -135,18 +149,26 @@ def check_multipart(client, key: str) -> str:
     payload = os.urandom(11 * MIB)
     expected_hash = hashlib.sha256(payload).hexdigest()
     # Порог и размер части по 5 МиБ: 11 МиБ уйдут тремя частями.
-    transfer = TransferConfig(multipart_threshold=5 * MIB, multipart_chunksize=5 * MIB)
-    client.upload_fileobj(io.BytesIO(payload), TEST_BUCKET, key, Config=transfer)
+    transfer = TransferConfig(
+        multipart_threshold=5 * MIB, multipart_chunksize=5 * MIB
+    )
+    client.upload_fileobj(
+        io.BytesIO(payload), TEST_BUCKET, key, Config=transfer
+    )
     received = client.get_object(Bucket=TEST_BUCKET, Key=key)["Body"].read()
     assert len(received) == len(payload), "размер после загрузки не совпадает"
-    assert hashlib.sha256(received).hexdigest() == expected_hash, "хеш не совпадает"
+    assert hashlib.sha256(received).hexdigest() == expected_hash, (
+        "хеш не совпадает"
+    )
     return "11 МиБ тремя частями, хеш совпал"
 
 
 def cleanup(client, keys: list[str]) -> str:
     for key in keys:
         client.delete_object(Bucket=TEST_BUCKET, Key=key)
-    left = client.list_objects_v2(Bucket=TEST_BUCKET, Prefix=PREFIX).get("Contents", [])
+    left = client.list_objects_v2(Bucket=TEST_BUCKET, Prefix=PREFIX).get(
+        "Contents", []
+    )
     assert not left, f"остались объекты: {[item['Key'] for item in left]}"
     return ""
 
@@ -176,7 +198,9 @@ def check_storage(name: str) -> dict:
     if missing:
         return fail(f"не заданы переменные: {', '.join(missing)}")
     if not values["PORT"].isdigit():
-        return fail(f"S3_{name}_PORT должен быть числом, сейчас: {values['PORT']}")
+        return fail(
+            f"S3_{name}_PORT должен быть числом, сейчас: {values['PORT']}"
+        )
 
     endpoint = f"http://{values['HOST']}:{values['PORT']}"
     print(f"Адрес: {endpoint}")
@@ -230,7 +254,9 @@ def main() -> None:
             "Добавь хранилище в .env (HOST, PORT, ACCESS_KEY, SECRET_KEY) "
             "и запусти через uv run --env-file .env"
         )
-    print(f"Найдено хранилищ: {len(names)} ({', '.join(name.lower() for name in names)})")
+    print(
+        f"Найдено хранилищ: {len(names)} ({', '.join(name.lower() for name in names)})"
+    )
 
     all_results = {}
     for name in names:

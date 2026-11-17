@@ -31,7 +31,9 @@ def test_logs_in_once_and_fetches() -> None:
 
 
 def test_stops_on_rejected_credentials() -> None:
-    client = make_client(lambda request: httpx.Response(200, json={"Login": "Failed"}))
+    client = make_client(
+        lambda request: httpx.Response(200, json={"Login": "Failed"})
+    )
     with pytest.raises(SourceStopped):
         client.login()
 
@@ -51,7 +53,12 @@ def test_stops_on_403_without_retry() -> None:
 
 
 def test_waits_retry_after_on_429_then_succeeds() -> None:
-    answers = iter([httpx.Response(429, headers={"Retry-After": "7"}), httpx.Response(200, content=BODY)])
+    answers = iter(
+        [
+            httpx.Response(429, headers={"Retry-After": "7"}),
+            httpx.Response(200, content=BODY),
+        ]
+    )
     sleeps: list[float] = []
 
     def handler(request: httpx.Request) -> httpx.Response:

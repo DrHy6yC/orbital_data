@@ -21,17 +21,25 @@ class CelesTrakClient:
     def fetch_gp(self, group: str, fmt: str = "CSV") -> bytes:
         """Один запрос GP по группе. Любой ответ, кроме HTTP 200, останавливает работу."""
         try:
-            response = self._client.get(BASE_URL, params={"GROUP": group, "FORMAT": fmt})
+            response = self._client.get(
+                BASE_URL, params={"GROUP": group, "FORMAT": fmt}
+            )
         except httpx.HTTPError as error:
-            raise SourceStopped(f"CelesTrak: сетевая ошибка {error!r}") from error
+            raise SourceStopped(
+                f"CelesTrak: сетевая ошибка {error!r}"
+            ) from error
         if response.status_code != 200:
-            raise SourceStopped(f"CelesTrak: HTTP {response.status_code}, запросы прекращены")
+            raise SourceStopped(
+                f"CelesTrak: HTTP {response.status_code}, запросы прекращены"
+            )
         body = response.content
         head = body[:200].decode("utf-8", errors="replace").strip().lower()
         if not head:
             raise SourceStopped("CelesTrak: пустое тело ответа")
         if head.startswith(ERROR_PREFIXES):
-            raise SourceStopped(f"CelesTrak: ответ похож на ошибку: {head[:80]}")
+            raise SourceStopped(
+                f"CelesTrak: ответ похож на ошибку: {head[:80]}"
+            )
         return body
 
     def close(self) -> None:

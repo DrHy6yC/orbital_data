@@ -22,9 +22,7 @@ def main() -> None:
     data_directory = Path(__file__).resolve().parent.parent / "data"
     with CelesTrakClient() as celestrak:
         with SpaceTrackClient.from_env() as space_track:
-            result = download_datasets(
-                celestrak, space_track, data_directory
-            )
+            result = download_datasets(celestrak, space_track, data_directory)
     show_result(result)
     if result.errors:
         sys.exit(1)

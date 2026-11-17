@@ -8,7 +8,9 @@ CSV_BODY = b"OBJECT_NAME,OBJECT_ID\nISS (ZARYA),1998-067A\n"
 
 
 def make_client(handler) -> CelesTrakClient:
-    return CelesTrakClient(httpx.Client(transport=httpx.MockTransport(handler)))
+    return CelesTrakClient(
+        httpx.Client(transport=httpx.MockTransport(handler))
+    )
 
 
 def test_returns_body_on_200() -> None:

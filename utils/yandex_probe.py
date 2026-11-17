@@ -21,7 +21,9 @@ def get(name: str) -> str:
     if not value:
         sys.exit(f"Не задана переменная {name}")
     if raw != value:
-        print(f"[ПРЕДУПРЕЖДЕНИЕ] {name}: лишние пробелы по краям значения, они убраны")
+        print(
+            f"[ПРЕДУПРЕЖДЕНИЕ] {name}: лишние пробелы по краям значения, они убраны"
+        )
     return value
 
 
@@ -32,7 +34,9 @@ key_id = get("BACKUP_S3_ACCESS_KEY")
 secret = get("BACKUP_S3_SECRET_KEY")
 
 # Идентификатор ключа не секрет: печатаем его, чтобы сверить с консолью.
-print(f"Ключ: {key_id}, длина секрета: {len(secret)}, бакет: {bucket}, регион: {region}")
+print(
+    f"Ключ: {key_id}, длина секрета: {len(secret)}, бакет: {bucket}, регион: {region}"
+)
 
 client = boto3.client(
     "s3",
@@ -48,7 +52,9 @@ try:
 except ClientError as error:
     info = error.response["Error"]
     request_id = error.response["ResponseMetadata"].get("RequestId", "-")
-    sys.exit(f"[ОШИБКА] {info.get('Code')}: {info.get('Message')} (RequestId {request_id})")
+    sys.exit(
+        f"[ОШИБКА] {info.get('Code')}: {info.get('Message')} (RequestId {request_id})"
+    )
 except BotoCoreError as error:
     sys.exit(f"[ОШИБКА] {error}")
 

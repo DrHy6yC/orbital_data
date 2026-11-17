@@ -34,7 +34,7 @@ import os
 import subprocess
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import boto3
@@ -49,7 +49,9 @@ CLOUD_BRONZE_PREFIX = "bronze/"
 CLOUD_POSTGRES_PREFIX = "postgres/"
 SKIP_PREFIX = "_healthcheck/"  # служебные объекты проверки, их не копируем
 # Объекты до 64 МиБ загружаются одним запросом (меньше операций PUT).
-UPLOAD_CONFIG = TransferConfig(multipart_threshold=64 * MIB, multipart_chunksize=64 * MIB)
+UPLOAD_CONFIG = TransferConfig(
+    multipart_threshold=64 * MIB, multipart_chunksize=64 * MIB
+)
 
 # Счётчики операций за запуск (для контроля бесплатного лимита).
 stats = {"put": 0, "list": 0, "bytes": 0}
@@ -58,7 +60,9 @@ stats = {"put": 0, "list": 0, "bytes": 0}
 def required(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
-        sys.exit(f"Не задана переменная {name}. Добавь её в .env и запускай через uv run --env-file .env")
+        sys.exit(
+            f"Не задана переменная {name}. Добавь её в .env и запускай через uv run --env-file .env"
+        )
     return value
 
 
@@ -115,10 +119,14 @@ def make_local_client(source: str):
     )
 
 
-def list_objects(client, bucket: str, prefix: str = "", cloud: bool = False) -> dict[str, int]:
+def list_objects(
+    client, bucket: str, prefix: str = "", cloud: bool = False
+) -> dict[str, int]:
     """Возвращает {ключ: размер}. Для облака считает запросы LIST."""
     objects = {}
-    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+    for page in client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=prefix
+    ):
         if cloud:
             stats["list"] += 1
         for item in page.get("Contents", []):
@@ -140,7 +148,9 @@ def check_access(cloud, bucket: str) -> None:
     print(f"[OK] доступ к бакету {bucket}: запись, чтение, удаление")
 
 
-def backup_bronze(local, cloud, settings: dict, cloud_all: dict, total: int, dry_run: bool):
+def backup_bronze(
+    local, cloud, settings: dict, cloud_all: dict, total: int, dry_run: bool
+):
     """Копирует новые объекты bronze. Возвращает (новый размер бакета, успех)."""
     local_objects = {
         key: size
@@ -148,14 +158,20 @@ def backup_bronze(local, cloud, settings: dict, cloud_all: dict, total: int, dry
         if not key.startswith(SKIP_PREFIX)
     }
     in_cloud = {
-        key[len(CLOUD_BRONZE_PREFIX):]: size
+        key[len(CLOUD_BRONZE_PREFIX) :]: size
         for key, size in cloud_all.items()
         if key.startswith(CLOUD_BRONZE_PREFIX)
     }
     for key, size in local_objects.items():
         if key in in_cloud and in_cloud[key] != size:
-            print(f"[ПРЕДУПРЕЖДЕНИЕ] {key}: размер в облаке отличается, не перезаписываю")
-    todo = [(key, size) for key, size in sorted(local_objects.items()) if key not in in_cloud]
+            print(
+                f"[ПРЕДУПРЕЖДЕНИЕ] {key}: размер в облаке отличается, не перезаписываю"
+            )
+    todo = [
+        (key, size)
+        for key, size in sorted(local_objects.items())
+        if key not in in_cloud
+    ]
     todo_size = sum(size for _, size in todo)
     print(
         f"Bronze: объектов локально {len(local_objects)}, "
@@ -163,13 +179,20 @@ def backup_bronze(local, cloud, settings: dict, cloud_all: dict, total: int, dry
     )
     for key, size in todo:
         if total + size > settings["max_bytes"]:
-            print(f"[СТОП] {key}: бакет превысил бы лимит {settings['max_bytes'] // MIB} МиБ")
+            print(
+                f"[СТОП] {key}: бакет превысил бы лимит {settings['max_bytes'] // MIB} МиБ"
+            )
             return total, False
         if dry_run:
             print(f"[ПРОБНЫЙ ЗАПУСК] {key} ({size} байт)")
         else:
             body = local.get_object(Bucket=SOURCE_BUCKET, Key=key)["Body"]
-            cloud.upload_fileobj(body, settings["bucket"], CLOUD_BRONZE_PREFIX + key, Config=UPLOAD_CONFIG)
+            cloud.upload_fileobj(
+                body,
+                settings["bucket"],
+                CLOUD_BRONZE_PREFIX + key,
+                Config=UPLOAD_CONFIG,
+            )
             stats["put"] += 1
             stats["bytes"] += size
             print(f"[OK] {key}")
@@ -177,11 +200,24 @@ def backup_bronze(local, cloud, settings: dict, cloud_all: dict, total: int, dry
     return total, True
 
 
-def backup_postgres(cloud, settings: dict, cloud_all: dict, total: int, dry_run: bool):
+def backup_postgres(
+    cloud, settings: dict, cloud_all: dict, total: int, dry_run: bool
+):
     """Делает дамп PostgreSQL и загружает его. Возвращает (новый размер бакета, успех)."""
     user = required("POSTGRES_USER")
     db = required("POSTGRES_DB")
-    command = ["docker", "compose", "exec", "-T", "postgres", "pg_dump", "-U", user, "-d", db]
+    command = [
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        "postgres",
+        "pg_dump",
+        "-U",
+        user,
+        "-d",
+        db,
+    ]
     try:
         result = subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True)
     except FileNotFoundError:
@@ -189,14 +225,18 @@ def backup_postgres(cloud, settings: dict, cloud_all: dict, total: int, dry_run:
         return total, False
     if result.returncode != 0 or not result.stdout:
         message = result.stderr.decode("utf-8", errors="replace").strip()
-        print(f"[ОШИБКА] pg_dump не выполнен (контейнер postgres запущен?): {message}")
+        print(
+            f"[ОШИБКА] pg_dump не выполнен (контейнер postgres запущен?): {message}"
+        )
         return total, False
 
     data = gzip.compress(result.stdout)  # дамп небольшой, держим в памяти
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     key = f"{CLOUD_POSTGRES_PREFIX}{db}_{stamp}.sql.gz"
     if total + len(data) > settings["max_bytes"]:
-        print(f"[СТОП] дамп ({len(data) / MIB:.2f} МиБ) превысил бы лимит бакета")
+        print(
+            f"[СТОП] дамп ({len(data) / MIB:.2f} МиБ) превысил бы лимит бакета"
+        )
         return total, False
     if dry_run:
         print(f"[ПРОБНЫЙ ЗАПУСК] {key} ({len(data)} байт)")
@@ -208,7 +248,9 @@ def backup_postgres(cloud, settings: dict, cloud_all: dict, total: int, dry_run:
     total += len(data)
 
     # Храним только последние N дампов. Удаляем только внутри папки postgres/.
-    dumps = sorted(k for k in cloud_all if k.startswith(CLOUD_POSTGRES_PREFIX)) + [key]
+    dumps = sorted(
+        k for k in cloud_all if k.startswith(CLOUD_POSTGRES_PREFIX)
+    ) + [key]
     for old_key in dumps[: max(0, len(dumps) - settings["keep_dumps"])]:
         if dry_run:
             print(f"[ПРОБНЫЙ ЗАПУСК] удалил бы старый дамп {old_key}")
@@ -219,15 +261,32 @@ def backup_postgres(cloud, settings: dict, cloud_all: dict, total: int, dry_run:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Резервное копирование в облако")
-    parser.add_argument("--check", action="store_true", help="только проверить доступ к облачному бакету")
-    parser.add_argument("--dry-run", action="store_true", help="показать, что будет скопировано, ничего не загружая")
-    parser.add_argument("--only", choices=("bronze", "postgres"), help="копировать только одну часть")
+    parser = argparse.ArgumentParser(
+        description="Резервное копирование в облако"
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="только проверить доступ к облачному бакету",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="показать, что будет скопировано, ничего не загружая",
+    )
+    parser.add_argument(
+        "--only",
+        choices=("bronze", "postgres"),
+        help="копировать только одну часть",
+    )
     args = parser.parse_args()
 
     settings = load_settings()
     cloud = make_client(
-        settings["endpoint"], settings["region"], settings["access_key"], settings["secret_key"]
+        settings["endpoint"],
+        settings["region"],
+        settings["access_key"],
+        settings["secret_key"],
     )
     ok = True
     try:
@@ -236,13 +295,19 @@ def main() -> None:
         else:
             cloud_all = list_objects(cloud, settings["bucket"], cloud=True)
             total = sum(cloud_all.values())
-            print(f"Облачный бакет: {total / MIB:.2f} МиБ из {settings['max_bytes'] // MIB} МиБ")
+            print(
+                f"Облачный бакет: {total / MIB:.2f} МиБ из {settings['max_bytes'] // MIB} МиБ"
+            )
             if args.only in (None, "bronze"):
                 local = make_local_client(settings["source"])
-                total, done = backup_bronze(local, cloud, settings, cloud_all, total, args.dry_run)
+                total, done = backup_bronze(
+                    local, cloud, settings, cloud_all, total, args.dry_run
+                )
                 ok = ok and done
             if args.only in (None, "postgres"):
-                total, done = backup_postgres(cloud, settings, cloud_all, total, args.dry_run)
+                total, done = backup_postgres(
+                    cloud, settings, cloud_all, total, args.dry_run
+                )
                 ok = ok and done
             print(f"Размер бакета после копирования: {total / MIB:.2f} МиБ")
     except (ClientError, BotoCoreError) as error:
