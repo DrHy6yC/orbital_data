@@ -3,12 +3,12 @@ from pathlib import Path
 import pytest
 from botocore.exceptions import ClientError
 
+from orbital_data.s3_access import read_settings
 from orbital_data.source_snapshots.upload import (
     BUCKET,
     SnapshotUploader,
     UploadError,
     make_key,
-    read_settings,
 )
 
 FILE_NAME = "2026-11-15T10-10-00Z.json"
@@ -86,7 +86,7 @@ def test_read_settings_needs_every_variable(
     monkeypatch.delenv("S3_RUSTFS_SECRET_KEY", raising=False)
 
     with pytest.raises(UploadError):
-        read_settings()
+        read_settings("RUSTFS")
 
 
 def test_read_settings_checks_port(
@@ -98,4 +98,4 @@ def test_read_settings_checks_port(
     monkeypatch.setenv("S3_RUSTFS_SECRET_KEY", "secret")
 
     with pytest.raises(UploadError):
-        read_settings()
+        read_settings("RUSTFS")
