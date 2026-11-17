@@ -174,6 +174,43 @@ docker compose up -d postgres s3
 docker compose ps
 ```
 
+### Схема и справочники
+
+Схема и справочники применяются скриптом `utils/apply_sql.py`. Он
+читает файлы как UTF-8, поэтому русские названия не портятся,
+а команды одинаковы на Windows и macOS.
+
+Применить все файлы каталога по порядку:
+
+```bash
+uv run --env-file .env python utils/apply_sql.py sql
+```
+
+Применить один файл:
+
+```bash
+uv run --env-file .env python utils/apply_sql.py sql/002_seed.sql
+```
+
+Файлы применяются в одной транзакции: если один из них завершится
+ошибкой, база останется в состоянии до запуска. Пустой файл
+пропускается.
+
+Пересоздать схему с нуля (удаляет схему `orbital` вместе с данными
+метаданных):
+
+```bash
+docker compose exec -T postgres psql -U orbital -d orbital_data -c "DROP SCHEMA IF EXISTS orbital CASCADE;"
+uv run --env-file .env python utils/apply_sql.py sql
+```
+
+Проверять содержимое лучше в DBeaver: в консоли PowerShell кириллица
+отображается некорректно (помогает `chcp 65001`).
+
+Не применяйте файлы через `Get-Content ... | docker compose exec ...`:
+PowerShell перекодирует текст по кодовой странице консоли и заменяет
+русские буквы на `?`.
+
 ### MinIO (локально, без Docker)
 
 Установка Go и сборка MinIO описаны в
