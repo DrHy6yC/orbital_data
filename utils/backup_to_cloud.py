@@ -30,15 +30,19 @@
 
 import argparse
 import gzip
+import hashlib
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 import boto3
 from boto3.s3.transfer import TransferConfig
+from botocore.client import BaseClient
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
@@ -52,6 +56,9 @@ SKIP_PREFIX = "_healthcheck/"  # служебные объекты провер�
 UPLOAD_CONFIG = TransferConfig(
     multipart_threshold=64 * MIB, multipart_chunksize=64 * MIB
 )
+GZIP_SUFFIX = ".gz"
+COMPRESS_LEVEL = 9
+CHUNK_SIZE = 1024 * 1024
 
 # Счётчики операций за запуск (для контроля бесплатного лимита).
 stats = {"put": 0, "list": 0, "bytes": 0}
@@ -148,55 +155,93 @@ def check_access(cloud, bucket: str) -> None:
     print(f"[OK] доступ к бакету {bucket}: запись, чтение, удаление")
 
 
+def download_object(local: BaseClient, key: str, target_path: Path) -> str:
+    """Скачивает объект в файл и возвращает его sha256."""
+    digest = hashlib.sha256()
+    with local.get_object(Bucket=SOURCE_BUCKET, Key=key)["Body"] as body:
+        with target_path.open("wb") as file:
+            chunk = body.read(CHUNK_SIZE)
+            while chunk:
+                digest.update(chunk)
+                file.write(chunk)
+                chunk = body.read(CHUNK_SIZE)
+    return digest.hexdigest()
+
+
+def compress_file(source_path: Path, target_path: Path) -> int:
+    """Сжимает файл gzip и возвращает размер результата."""
+    with source_path.open("rb") as source:
+        with gzip.open(
+            target_path, "wb", compresslevel=COMPRESS_LEVEL
+        ) as target:
+            shutil.copyfileobj(source, target)
+    return target_path.stat().st_size
+
+
 def backup_bronze(
-    local, cloud, settings: dict, cloud_all: dict, total: int, dry_run: bool
-):
-    """Копирует новые объекты bronze. Возвращает (новый размер бакета, успех)."""
+    local: BaseClient,
+    cloud: BaseClient,
+    settings: dict,
+    cloud_all: dict[str, int],
+    total: int,
+    is_dry_run: bool,
+) -> tuple[int, bool]:
+    """Копирует отсутствующие объекты bronze в gzip.
+
+    Возвращает новый размер бакета и признак успеха.
+    """
     local_objects = {
         key: size
         for key, size in list_objects(local, SOURCE_BUCKET).items()
         if not key.startswith(SKIP_PREFIX)
     }
-    in_cloud = {
-        key[len(CLOUD_BRONZE_PREFIX) :]: size
-        for key, size in cloud_all.items()
-        if key.startswith(CLOUD_BRONZE_PREFIX)
-    }
-    for key, size in local_objects.items():
-        if key in in_cloud and in_cloud[key] != size:
-            print(
-                f"[ПРЕДУПРЕЖДЕНИЕ] {key}: размер в облаке отличается, не перезаписываю"
-            )
     todo = [
         (key, size)
         for key, size in sorted(local_objects.items())
-        if key not in in_cloud
+        if CLOUD_BRONZE_PREFIX + key + GZIP_SUFFIX not in cloud_all
     ]
-    todo_size = sum(size for _, size in todo)
     print(
         f"Bronze: объектов локально {len(local_objects)}, "
-        f"к копированию {len(todo)} ({todo_size / MIB:.2f} МиБ)"
+        f"к копированию {len(todo)}"
     )
-    for key, size in todo:
-        if total + size > settings["max_bytes"]:
-            print(
-                f"[СТОП] {key}: бакет превысил бы лимит {settings['max_bytes'] // MIB} МиБ"
-            )
-            return total, False
-        if dry_run:
-            print(f"[ПРОБНЫЙ ЗАПУСК] {key} ({size} байт)")
-        else:
-            body = local.get_object(Bucket=SOURCE_BUCKET, Key=key)["Body"]
-            cloud.upload_fileobj(
-                body,
-                settings["bucket"],
-                CLOUD_BRONZE_PREFIX + key,
-                Config=UPLOAD_CONFIG,
-            )
+    with tempfile.TemporaryDirectory() as temp_directory:
+        for key, size in todo:
+            if is_dry_run:
+                print(f"[ПРОБНЫЙ ЗАПУСК] {key} ({size} байт)")
+                continue
+            downloaded = Path(temp_directory) / "snapshot"
+            packed = Path(temp_directory) / "snapshot.gz"
+            try:
+                checksum = download_object(local, key, downloaded)
+                packed_size = compress_file(downloaded, packed)
+            except (ClientError, BotoCoreError, OSError) as error:
+                print(f"[ОШИБКА] {key}: {error}")
+                return total, False
+            if total + packed_size > settings["max_bytes"]:
+                print(
+                    f"[СТОП] {key}: бакет превысил бы лимит "
+                    f"{settings['max_bytes'] // MIB} МиБ"
+                )
+                return total, False
+            cloud_key = CLOUD_BRONZE_PREFIX + key + GZIP_SUFFIX
+            try:
+                cloud.upload_file(
+                    Filename=str(packed),
+                    Bucket=settings["bucket"],
+                    Key=cloud_key,
+                    ExtraArgs={"Metadata": {"sha256": checksum}},
+                    Config=UPLOAD_CONFIG,
+                )
+            except (ClientError, BotoCoreError) as error:
+                print(f"[ОШИБКА] {key}: {error}")
+                return total, False
             stats["put"] += 1
-            stats["bytes"] += size
-            print(f"[OK] {key}")
-        total += size
+            stats["bytes"] += packed_size
+            total += packed_size
+            print(
+                f"[OK] {key} -> {cloud_key} "
+                f"({size / MIB:.2f} МиБ -> {packed_size / MIB:.2f} МиБ)"
+            )
     return total, True
 
 
@@ -231,7 +276,7 @@ def backup_postgres(
         return total, False
 
     data = gzip.compress(result.stdout)  # дамп небольшой, держим в памяти
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
     key = f"{CLOUD_POSTGRES_PREFIX}{db}_{stamp}.sql.gz"
     if total + len(data) > settings["max_bytes"]:
         print(
