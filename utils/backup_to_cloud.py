@@ -1,11 +1,14 @@
 """Резервное копирование в облако в пределах бесплатного уровня.
 
 Копирует:
-1. объекты бакета bronze из локального S3 (RustFS или MinIO) в облачный бакет,
-   в папку bronze/. Копируются только новые объекты: в облаке ничего не
-   перезаписывается и не удаляется;
-2. дамп PostgreSQL (pg_dump, сжатый gzip) в папку postgres/. Хранятся последние
-   N дампов, более старые удаляются.
+1. объекты бакета bronze из локального S3 (RustFS или MinIO) в облачный
+   бакет, в папку bronze/, сжатыми gzip. Копируются только отсутствующие
+   ключи; sha256 пишется в метаданные объекта;
+2. дамп PostgreSQL (pg_dump, сжатый gzip) в папку postgres/. Хранятся
+   последние N дампов, более старые удаляются.
+
+Просроченные объекты bronze удаляются по окнам хранения
+BACKUP_KEEP_<НАБОР>_DAYS и только после успешной загрузки новых.
 
 Слои Silver и Gold не копируются: их можно пересобрать из Bronze.
 
@@ -47,6 +50,13 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from orbital_data.backup_retention import (  # noqa: E402
+    RetentionPlan,
+    expired_keys,
+)
+
 MIB = 1024 * 1024
 SOURCE_BUCKET = "bronze"
 CLOUD_BRONZE_PREFIX = "bronze/"
@@ -60,8 +70,11 @@ GZIP_SUFFIX = ".gz"
 COMPRESS_LEVEL = 9
 CHUNK_SIZE = 1024 * 1024
 
+RETENTION_PREFIX = "BACKUP_KEEP_"
+RETENTION_SUFFIX = "_DAYS"
+
 # Счётчики операций за запуск (для контроля бесплатного лимита).
-stats = {"put": 0, "list": 0, "bytes": 0}
+stats = {"put": 0, "list": 0, "delete": 0, "bytes": 0}
 
 
 def required(name: str) -> str:
@@ -178,28 +191,86 @@ def compress_file(source_path: Path, target_path: Path) -> int:
     return target_path.stat().st_size
 
 
+def read_retention() -> dict[str, int]:
+    """Читает окна хранения наборов из BACKUP_KEEP_<НАБОР>_DAYS."""
+    retention = {}
+    for name, raw in os.environ.items():
+        if not name.startswith(RETENTION_PREFIX):
+            continue
+        if not name.endswith(RETENTION_SUFFIX):
+            continue
+        dataset = name[len(RETENTION_PREFIX) : -len(RETENTION_SUFFIX)]
+        dataset = dataset.lower()
+        value = raw.strip()
+        if not value:
+            continue
+        if not value.isdigit() or int(value) == 0:
+            sys.exit(
+                f"{name} должен быть целым числом дней больше нуля, "
+                f"сейчас: {value}"
+            )
+        retention[dataset] = int(value)
+    return retention
+
+
+def show_plan(
+    plan: RetentionPlan,
+    cloud_all: dict[str, int],
+    is_dry_run: bool,
+) -> None:
+    """Печатает, что будет удалено по истечении окон хранения."""
+    freed = sum(cloud_all[key] for key in plan.expired)
+    print(
+        f"Просрочено по окнам хранения: {len(plan.expired)} объектов, "
+        f"{freed / MIB:.2f} МиБ"
+    )
+    if is_dry_run:
+        for key in plan.expired:
+            print(f"[ПРОБНЫЙ ЗАПУСК] удалил бы {key}")
+    for key in plan.unknown:
+        print(f"[ВНИМАНИЕ] {key}: окно не задано, объект остаётся")
+
+
+def delete_expired(cloud: BaseClient, bucket: str, expired: list[str]) -> bool:
+    """Удаляет просроченные объекты. Возвращает признак успеха."""
+    ok = True
+    for key in expired:
+        try:
+            cloud.delete_object(Bucket=bucket, Key=key)
+        except (ClientError, BotoCoreError) as error:
+            print(f"[ОШИБКА] не удалён {key}: {error}")
+            ok = False
+            continue
+        stats["delete"] += 1
+        print(f"[OK] удалён {key}")
+    return ok
+
+
 def backup_bronze(
     local: BaseClient,
     cloud: BaseClient,
     settings: dict,
     cloud_all: dict[str, int],
+    expired: set[str],
     total: int,
     is_dry_run: bool,
 ) -> tuple[int, bool]:
     """Копирует отсутствующие объекты bronze в gzip.
 
-    Возвращает новый размер бакета и признак успеха.
+    Просроченные объекты не загружаются заново: их удалит этот же
+    запуск. Возвращает новый размер бакета и признак успеха.
     """
     local_objects = {
         key: size
         for key, size in list_objects(local, SOURCE_BUCKET).items()
         if not key.startswith(SKIP_PREFIX)
     }
-    todo = [
-        (key, size)
-        for key, size in sorted(local_objects.items())
-        if CLOUD_BRONZE_PREFIX + key + GZIP_SUFFIX not in cloud_all
-    ]
+    todo = []
+    for key, size in sorted(local_objects.items()):
+        cloud_key = CLOUD_BRONZE_PREFIX + key + GZIP_SUFFIX
+        if cloud_key in cloud_all or cloud_key in expired:
+            continue
+        todo.append((key, size))
     print(
         f"Bronze: объектов локально {len(local_objects)}, "
         f"к копированию {len(todo)}"
@@ -341,27 +412,51 @@ def main() -> None:
             cloud_all = list_objects(cloud, settings["bucket"], cloud=True)
             total = sum(cloud_all.values())
             print(
-                f"Облачный бакет: {total / MIB:.2f} МиБ из {settings['max_bytes'] // MIB} МиБ"
+                f"Облачный бакет: {total / MIB:.2f} МиБ "
+                f"из {settings['max_bytes'] // MIB} МиБ"
             )
             if args.only in (None, "bronze"):
+                plan = expired_keys(
+                    cloud_all, read_retention(), datetime.now(UTC)
+                )
+                show_plan(plan, cloud_all, args.dry_run)
+                freed = sum(cloud_all[key] for key in plan.expired)
                 local = make_local_client(settings["source"])
                 total, done = backup_bronze(
-                    local, cloud, settings, cloud_all, total, args.dry_run
+                    local,
+                    cloud,
+                    settings,
+                    cloud_all,
+                    set(plan.expired),
+                    total - freed,
+                    args.dry_run,
                 )
                 ok = ok and done
+                if not args.dry_run:
+                    if not done:
+                        print(
+                            "Удаление пропущено: загрузка завершилась "
+                            "с ошибкой"
+                        )
+                    elif plan.expired:
+                        delete_expired(cloud, settings["bucket"], plan.expired)
             if args.only in (None, "postgres"):
                 total, done = backup_postgres(
                     cloud, settings, cloud_all, total, args.dry_run
                 )
                 ok = ok and done
+            if not args.dry_run:
+                listed = list_objects(cloud, settings["bucket"], cloud=True)
+                total = sum(listed.values())
             print(f"Размер бакета после копирования: {total / MIB:.2f} МиБ")
     except (ClientError, BotoCoreError) as error:
         sys.exit(f"[ОШИБКА] {error}")
 
-    operations = stats["put"] + stats["list"]
+    operations = stats["put"] + stats["list"] + stats["delete"]
     print(
-        f"За запуск: загружено {stats['bytes'] / MIB:.2f} МиБ, операций записи и листинга "
-        f"{operations} (бесплатно 10 000 в месяц)"
+        f"За запуск: загружено {stats['bytes'] / MIB:.2f} МиБ, "
+        f"операций записи, удаления и листинга {operations} "
+        f"(бесплатно 10 000 в месяц)"
     )
     sys.exit(0 if ok else 1)
 
