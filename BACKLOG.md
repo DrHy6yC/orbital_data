@@ -5,37 +5,44 @@
 
 ## Активные задачи
 
-### 4.0.1. Исправление .env.example
+### 4.0.3. Применение SQL-файлов без потери кириллицы
 
-**Файл и место:** `.env.example`.
+**Файл и место:** `README.md`, раздел «PostgreSQL и RustFS (Docker)»;
+`sql/001_schema.sql`, `sql/002_seed.sql`.
 
-**Что нужно сделать:** исправить `BBACKUP_S3_ENDPOINT` на
-`BACKUP_S3_ENDPOINT`, убрать placeholder `<не короче 8 символов>` из
-значения `S3_MINIO_SECRET_KEY`, сгруппировать переменные в блоки
-(Space-Track, PostgreSQL, RustFS, MinIO, Yandex) с комментариями и единым
-порядком.
+**Что нужно сделать:** при применении справочника русские названия
+наборов попали в `orbital.datasets` знаками вопроса. Причина —
+передача файла в `psql` через конвейер PowerShell
+(`Get-Content sql\002_seed.sql | docker compose exec ...`): консоль
+заменяет символы вне своей кодовой страницы на `?`. Сам файл в
+репозитории испорчен не был: он в UTF-8, портится именно передача.
 
-**Ожидаемый результат:** копия `.env.example` в `.env` не ломает
-`utils/backup_to_cloud.py` и `utils/check_s3.py`.
+Нужно:
 
-**Как проверить:** имена переменных из `required()` в
-`utils/backup_to_cloud.py` присутствуют в файле; значений с `<` и `>`
-в файле нет; `uv run --env-file .env python utils/check_s3.py` находит
-ровно два хранилища.
+- передавать файл в контейнер без перекодирования: скопировать его
+  (`docker compose cp sql\002_seed.sql postgres:/tmp/002_seed.sql`)
+  и выполнить `psql -f /tmp/002_seed.sql` внутри контейнера;
+- добавить в начало `sql/001_schema.sql` и `sql/002_seed.sql` строку
+  `SET client_encoding = 'UTF8';`;
+- на устройстве с Windows таблица `orbital.datasets` сейчас
+  отсутствует: `\dt orbital.*` показывает только `sources`, `runs`
+  и `snapshots`. Применить схему заново и заполнить справочник;
+- записать в `README.md` команды для Windows и для macOS: на macOS
+  PowerShell не нужен, там работает обычное перенаправление ввода.
 
-### 4.0.2. Убрать бакет gold из схемы S3
+**Учесть:** повторное применение `sql/001_schema.sql` на уже
+существующей схеме упадёт на `CREATE TABLE`; на рабочей базе
+достаточно создать только отсутствующую таблицу либо применить
+схему к пустой базе.
 
-**Файл и место:** `utils/check_s3.py`, константа `BUCKETS`, метка шага
-`STEP_BUCKETS`, docstring модуля.
+**Ожидаемый результат:** в `orbital.datasets` русские названия
+читаются целиком, знаков `?` нет; команда из `README.md` на чистой
+базе даёт тот же результат.
 
-**Что нужно сделать:** оставить бакеты `bronze` и `silver`, убрать
-упоминания бакета `gold` из скрипта, README и `docs/storage.md`.
-
-**Ожидаемый результат:** скрипт проверки создаёт и проверяет два бакета.
-
-**Как проверить:** `uv run --env-file .env python utils/check_s3.py`
-проходит, в отчёте два бакета; в репозитории нет S3-бакета gold
-(поиск по слову `gold` находит только ClickHouse и описание слоёв).
+**Как проверить:**
+- `docker compose exec -T postgres psql -U orbital -d orbital_data -c "SELECT code, title FROM orbital.datasets ORDER BY code;"` — пять строк с русскими названиями;
+- `docker compose exec -T postgres psql -U orbital -d orbital_data -c "SELECT count(*) FROM orbital.datasets WHERE title LIKE '%?%';"` — ноль;
+- `docker compose exec -T postgres psql -U orbital -d orbital_data -c "\dt orbital.*"` — четыре таблицы.
 
 ### 4.4. Запись снимков в Bronze RustFS
 
