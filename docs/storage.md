@@ -265,3 +265,33 @@ uv run --env-file .env python utils/check_backup_restore.py
 
 Ключ `--key <ключ>` проверяет один объект, `--all` — весь бэкап.
 В облаке выполняются только LIST, HEAD и GET.
+
+
+## 10. Веб-интерфейсы хранилищ
+
+Адреса указаны для значений по умолчанию из `.env.example`. Если порты
+в `.env` изменены, подставьте свои.
+
+| Хранилище | Адрес | Вход | Где меняется порт |
+|---|---|---|---|
+| RustFS | http://localhost:9001 | `S3_RUSTFS_ACCESS_KEY`, `S3_RUSTFS_SECRET_KEY` | `S3_RUSTFS_CONSOLE_PORT` |
+| MinIO | http://127.0.0.1:9003 | `S3_MINIO_ACCESS_KEY`, `S3_MINIO_SECRET_KEY` | `S3_MINIO_CONSOLE_PORT` |
+| Yandex Object Storage | https://console.yandex.cloud | аккаунт Yandex Cloud | не применимо |
+
+Особенности:
+
+- Консоли RustFS и MinIO слушают только `127.0.0.1`: они открываются
+  на той машине, где запущено хранилище.
+- RustFS работает в Docker (сервис `s3`), для консоли контейнер должен
+  быть в состоянии `healthy`: `docker compose ps`.
+- MinIO работает локальным процессом: пока окно с `utils/run_minio.*`
+  закрыто, консоль недоступна.
+- Прямая ссылка на бакет Yandex имеет вид
+  `https://console.yandex.cloud/folders/<идентификатор каталога>/storage/buckets/<имя бакета>`.
+  Идентификатор каталога виден в адресной строке консоли, имя бакета
+  берётся из `BACKUP_S3_BUCKET`. Формат ссылки сверяйте с актуальной
+  версией консоли.
+- Без браузера содержимое локальных хранилищ показывает
+  `uv run --env-file .env python utils/check_s3.py --list`, содержимое
+  облачного бакета (первые 10 объектов) показывает
+  `uv run --env-file .env python utils/yandex_probe.py`.
