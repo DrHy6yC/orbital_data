@@ -12,6 +12,7 @@ from pathlib import Path
 import psycopg
 
 CHUNK_SIZE = 1024 * 1024
+PRIMARY_STORAGE = "rustfs"
 
 
 class RegistryError(RuntimeError):
@@ -71,6 +72,27 @@ def define_status(saved: int, errors: int) -> str:
     if saved == 0:
         return "failed"
     return "partial"
+
+
+def save_copy_for_key(
+    connection: psycopg.Connection, storage: str, object_key: str
+) -> bool:
+    """Отмечает копию объекта по уже записанной копии в RustFS.
+
+    Снимок не создаётся заново: ключ ищется среди копий основного
+    хранилища. Повторная запись ничего не меняет.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO orbital.snapshot_copies (snapshot_id, "
+            "storage, object_key, file_size_bytes, status, copied_at) "
+            "SELECT snapshot_id, %s, object_key, file_size_bytes, "
+            "'ok', now() FROM orbital.snapshot_copies "
+            "WHERE storage = %s AND object_key = %s "
+            "ON CONFLICT (snapshot_id, storage) DO NOTHING",
+            (storage, PRIMARY_STORAGE, object_key),
+        )
+        return cursor.rowcount > 0
 
 
 class RunRegistry:
