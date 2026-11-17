@@ -36,14 +36,14 @@ from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
-BUCKETS = ("bronze", "silver", "gold")
+BUCKETS = ("bronze", "silver")
 TEST_BUCKET = "bronze"
 PREFIX = "_healthcheck/"
 MIB = 1024 * 1024
 SETTINGS = ("HOST", "PORT", "ACCESS_KEY", "SECRET_KEY")  # CONSOLE_PORT здесь не нужен
 
 STEP_AUTH = "доступ по ключам"
-STEP_BUCKETS = "бакеты bronze, silver, gold"
+STEP_BUCKETS = "бакеты bronze, silver"
 STEP_ROUNDTRIP = "запись, чтение, листинг"
 STEP_MULTIPART = "многочастная загрузка"
 STEP_CLEANUP = "удаление тестовых объектов"
