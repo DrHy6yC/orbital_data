@@ -6,6 +6,7 @@
 """
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import psycopg
@@ -22,6 +23,7 @@ from orbital_data.source_snapshots.registry import (  # noqa: E402
     RegistryError,
     RunRegistry,
     define_status,
+    last_fetch_times,
     parse_fetched_at,
 )
 from orbital_data.source_snapshots.upload import (  # noqa: E402
@@ -38,10 +40,19 @@ def main() -> None:
     except UploadError as error:
         sys.exit(f"Хранилище не настроено: {error}")
     registry = open_registry()
+    last_fetches: dict[str, datetime] = {}
+    if registry is None:
+        print("окна: база недоступна, проверка окон пропущена")
+    else:
+        last_fetches = last_fetch_times(registry.connection)
     with CelesTrakClient() as celestrak:
         with SpaceTrackClient.from_env() as space_track:
             result = download_datasets(
-                celestrak, space_track, data_directory, uploader
+                celestrak,
+                space_track,
+                data_directory,
+                uploader,
+                last_fetches=last_fetches,
             )
     show_result(result)
     if registry is not None:
@@ -89,6 +100,8 @@ def show_result(result: DownloadResult) -> None:
         key = result.uploads.get(folder)
         if key:
             print(f"    {BUCKET}/{key}")
+    for folder, reason in result.skipped.items():
+        print(f"{folder}: пропущено — {reason}")
     for source, message in result.errors.items():
         print(f"{source}: ошибка — {message}")
 

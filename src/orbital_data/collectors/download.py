@@ -12,6 +12,7 @@ from pathlib import Path
 from orbital_data.collectors.celestrak import CelesTrakClient
 from orbital_data.collectors.errors import SourceStopped
 from orbital_data.collectors.space_track import SpaceTrackClient
+from orbital_data.collectors.windows import skip_reason
 from orbital_data.source_snapshots.save import save_original
 from orbital_data.source_snapshots.upload import (
     SnapshotUploader,
@@ -36,6 +37,7 @@ class DownloadResult:
 
     datasets: dict[str, Path] = field(default_factory=dict)
     uploads: dict[str, str] = field(default_factory=dict)
+    skipped: dict[str, str] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
 
 
@@ -44,15 +46,24 @@ def download_datasets(
     space_track_client: SpaceTrackClient,
     data_directory: Path,
     uploader: SnapshotUploader | None = None,
+    *,
+    last_fetches: dict[str, datetime],
 ) -> DownloadResult:
     """Скачивает наборы по источникам и сразу сохраняет каждый.
 
-    При отказе источника его оставшиеся наборы не запрашиваются,
-    второй источник загружается полностью.
+    Набор пропускается, если его окно запросов ещё не прошло.
+    При отказе источника оставшиеся наборы этого источника
+    не запрашиваются, второй источник загружается полностью.
     """
     result = DownloadResult()
     timestamp = current_timestamp()
+    now = datetime.now(UTC)
     for group, (folder, extension) in CELESTRAK_DATASETS.items():
+        code = dataset_code(folder)
+        reason = skip_reason(code, now, last_fetches.get(code))
+        if reason:
+            result.skipped[folder] = reason
+            continue
         file_path = make_dataset_path(
             data_directory, folder, extension, timestamp
         )
@@ -64,6 +75,11 @@ def download_datasets(
         result.datasets[folder] = save_original(body, file_path)
         upload_snapshot(result, uploader, folder, file_path, data_directory)
     for api_class, (folder, extension) in SPACE_TRACK_DATASETS.items():
+        code = dataset_code(folder)
+        reason = skip_reason(code, now, last_fetches.get(code))
+        if reason:
+            result.skipped[folder] = reason
+            continue
         file_path = make_dataset_path(
             data_directory, folder, extension, timestamp
         )
@@ -75,6 +91,11 @@ def download_datasets(
         result.datasets[folder] = save_original(body, file_path)
         upload_snapshot(result, uploader, folder, file_path, data_directory)
     return result
+
+
+def dataset_code(folder: str) -> str:
+    """Код набора из папки: space_track/satcat -> satcat."""
+    return folder.rsplit("/", 1)[-1]
 
 
 def make_dataset_path(

@@ -95,6 +95,18 @@ def save_copy_for_key(
         return cursor.rowcount > 0
 
 
+def last_fetch_times(connection: psycopg.Connection) -> dict[str, datetime]:
+    """Возвращает время последнего снимка по коду набора."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT d.code, max(sn.fetched_at) "
+            "FROM orbital.snapshots sn "
+            "JOIN orbital.datasets d USING (dataset_id) "
+            "GROUP BY d.code"
+        )
+        return {code: last_fetch for code, last_fetch in cursor.fetchall()}
+
+
 class RunRegistry:
     """Записывает ход прогона в PostgreSQL."""
 
