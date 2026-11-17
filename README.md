@@ -5,29 +5,42 @@
 
 ## О проекте
 
-Цель — собрать доступные данные из открытых источников, сохранить оригиналы
+Цель: собрать доступные данные из открытых источников, сохранить оригиналы
 и историю изменений, обеспечить возможность повторной обработки. Проект
 также служит площадкой для практики Data Engineering.
 
-Что уже работает (этап 3): клиенты CelesTrak и Space-Track, загрузка пяти
-наборов и запись снимков источников в `data/`.
+Что уже работает:
+
+- этап 3: клиенты CelesTrak и Space-Track, загрузка пяти наборов, сохранение
+  снимков источников в `data/`;
+- этап 4 (частично): PostgreSQL и RustFS в Docker, локальный MinIO,
+  проверка S3-хранилищ (`utils/check_s3.py`), подготовлен скрипт бэкапа
+  в Yandex Object Storage (`utils/backup_to_cloud.py`).
+
+Дальше: запись снимков в Bronze, дублирование в MinIO, метаданные
+в PostgreSQL, Silver, ClickHouse. Подробности в [`PLAN.md`](PLAN.md).
 
 ## Технологический стек
 
 Используется сейчас:
 
 - **Python 3.12+** — основной язык разработки.
-- **httpx** — HTTP-клиент для загрузки данных.
 - **uv** — управление зависимостями и окружением.
+- **httpx** — HTTP-клиент для загрузки данных.
+- **boto3** — клиент S3 для проверок и бэкапа.
 - **pytest** — тесты.
+- **PostgreSQL** (Docker) — метаданные и операционная информация.
+- **RustFS** (Docker) — основное S3-хранилище Bronze и Silver.
+- **MinIO** (локально, без Docker) — дубль Bronze и Silver.
+- **Yandex Object Storage** — внешний бэкап в пределах бесплатного уровня.
 
 Запланировано:
 
-- **PostgreSQL** — метаданные и операционная информация.
-- **Rustfs** — хранение исходных данных.
-- **MinIO (S3)** — хранение исходных данных(дублирование).
-- **Parquet / PyArrow** — аналитическое хранение.
-- **DuckDB / dbt** — аналитическая обработка.
+- **Parquet / PyArrow** — слой Silver.
+- **ClickHouse** — таблицы Silver и витрины Gold.
+- **DuckDB** — локальные проверки Parquet.
+- **dbt Core** (`dbt-clickhouse`) — преобразования и витрины.
+- **psycopg** — доступ к PostgreSQL из загрузчика.
 - **Apache Airflow** — оркестрация процессов.
 - **FastAPI** — REST API.
 - **SGP4** — орбитальные вычисления.
@@ -36,33 +49,52 @@
 
 Платформа использует архитектуру Lakehouse:
 
-- **Bronze** — исходные данные без изменений.
-- **Silver** — нормализованные и проверенные данные.
-- **Gold** — аналитические модели и витрины.
+- **Bronze** — исходные данные без изменений, хранятся в S3.
+- **Silver** — нормализованные и проверенные данные в Parquet, хранятся в S3.
+- **Gold** — аналитические витрины, строятся в ClickHouse, в S3 не хранятся.
+
+Роли хранилищ:
+
+- **RustFS** — основное, в него пишут загрузчик и обработка.
+- **MinIO** — локальный дубль Bronze и Silver.
+- **Yandex Object Storage** — внешний бэкап Bronze и дампов PostgreSQL.
+
+Роли хранилищ, схема ключей, лимиты и порядок восстановления:
+[`docs/storage.md`](docs/storage.md).
 
 ## Источники данных
 
 - **CelesTrak** — GP (TLE и OMM), SupGP, открытый доступ.
 - **Space-Track** — GP, GP_History, SATCAT, DECAY, нужна регистрация.
 
-Перечень источников: [`catalog.md`](docs/data_sources/catalog.md).
+Перечень источников: [`catalog.md`](docs/catalog.md).
 
 Выбранные наборы и частота загрузки:
-[`datasets.md`](docs/data_sources/datasets.md).
+[`datasets.md`](docs/datasets.md).
 
 ## Структура проекта
 
-    orbital_data/
+        orbital_data/
     ├── src/orbital_data/
     │   ├── collectors/          клиенты CelesTrak и Space-Track
     │   └── source_snapshots/    запись снимков источников
+    ├── sql/                     схемы PostgreSQL
     ├── tests/                   тесты
-    ├── docs/data_sources/       описание источников и наборов
-    ├── utils/                   скрипты проверки и исследования
+    ├── docs/
+    │   ├── catalog.md           перечень источников данных
+    │   ├── datasets.md          выбранные наборы и частота загрузки
+    │   ├── storage.md           роли хранилищ и восстановление
+    │   └── data_sources/
+    │       ├── celestrak.md     описание CelesTrak
+    │       └── space_track.md   описание Space-Track
+    ├── utils/                   скрипты проверки, запуска и копирования
     ├── data/                    снимки и файлы исследований, в Git не входит
+    ├── docker-compose.yml       PostgreSQL и RustFS
+    ├── .env.example             образец настроек
     ├── PLAN.md                  план этапов
     ├── BACKLOG.md               активные задачи
     ├── COMMIT_RULES.md          правила коммитов
+    ├── MINIO_INSTALL_LOCAL.md   установка и запуск MinIO без Docker
     ├── NOTES.md                 рабочие заметки
     └── README.md                описание проекта
 
@@ -70,30 +102,33 @@
 
 ## Запуск
 
+Команды даны для macOS и Linux (bash, zsh). На Windows отличаются только
+несколько команд, они вынесены в отдельный раздел ниже.
+
 ### Требования
 
 - Python 3.12 или новее
 - uv
 - Git
+- Docker (для PostgreSQL и RustFS)
+- Go 1.24 или новее (только для локального MinIO)
 
 ### Получение проекта
 
-Склонировать репозиторий и перейти в каталог проекта:
-
-```powershell
+```bash
 git clone https://github.com/DrHy6yC/orbital_data.git
 cd orbital_data
 ```
 
-Обновить уже имеющуюся копию до последней версии:
+Обновить уже имеющуюся копию:
 
-```powershell
+```bash
 git pull
 ```
 
 ### Установка
 
-```powershell
+```bash
 uv sync
 ```
 
@@ -117,35 +152,48 @@ uv sync
 
 ### Настройка окружения
 
-Скопировать образец и заполнить учётные данные Space-Track:
+Скопировать образец:
 
-```powershell
-Copy-Item .env.example .env
+```bash
+cp .env.example .env
 ```
 
-В `.env` два параметра: `SPACETRACK_USER` и `SPACETRACK_PASSWORD`.
-Для CelesTrak учётные данные не нужны: доступ открытый.
+В `.env` собраны настройки в блоках: Space-Track (`SPACETRACK_*`),
+PostgreSQL (`POSTGRES_*`), RustFS (`S3_RUSTFS_*`), MinIO (`S3_MINIO_*`)
+и облако Yandex (`BACKUP_*`). Заполнить нужно как минимум учётные данные
+Space-Track и пароли. Для CelesTrak учётные данные не нужны: доступ открытый.
+Файл `.env` в Git не попадает, ключи Yandex хранить только в нём.
 
-### База метаданных
+### PostgreSQL и RustFS (Docker)
 
-PostgreSQL работает в Docker, данные лежат в `postgres-data/` и в Git
-не попадают.
+Данные PostgreSQL лежат в `postgres-data/` и в Git не попадают, данные
+RustFS в томе Docker `s3-data`.
 
-```powershell
-docker compose up -d postgres
+```bash
+docker compose up -d postgres s3
 docker compose ps
 ```
-### Установка и запуск Minio (локально)
-Установка [`MINIO_INSTALL_LOCAL.md`](MINIO_INSTALL_LOCAL.md)
-```powershell
-# Запуск win
-New-Item utils\run_minio.ps1 -ItemType File
 
-# Linux и macOS
-touch utils/run_minio.sh
+### MinIO (локально, без Docker)
+
+Установка Go и сборка MinIO описаны в
+[`MINIO_INSTALL_LOCAL.md`](MINIO_INSTALL_LOCAL.md). Запуск (порты и ключи
+берутся из `S3_MINIO_*` в `.env`):
+
+```bash
 chmod +x utils/run_minio.sh
-
 ./utils/run_minio.sh
+```
+
+Остановка: `Ctrl+C` в окне с сервером.
+
+### Проверка хранилищ
+
+Проверка всех S3-хранилищ, описанных в `.env` (создаёт бакеты `bronze`
+и `silver`, пишет, читает и удаляет тестовые объекты):
+
+```bash
+uv run --env-file .env python utils/check_s3.py
 ```
 
 ### Команды запуска
@@ -154,22 +202,42 @@ chmod +x utils/run_minio.sh
 
 Проверка подключения: по одному запросу к каждому источнику.
 
-```powershell
+```bash
 uv run --env-file .env python utils/check_connection.py
 ```
 
 Загрузка пяти наборов и запись снимков в `data/`.
 
-```powershell
+```bash
 uv run --env-file .env python utils/check_download.py
 ```
 
 Сверка форматов GP CelesTrak: разовое исследование, около 20 секунд
 из-за паузы между запросами.
 
-```powershell
+```bash
 uv run python utils/compare_formats.py
 ```
+
+Резервное копирование в Yandex Object Storage: сначала проверка доступа
+и пробный запуск без загрузки.
+
+```bash
+uv run --env-file .env python utils/backup_to_cloud.py --check
+uv run --env-file .env python utils/backup_to_cloud.py --dry-run
+```
+
+### Windows (PowerShell)
+
+Отличаются только эти команды:
+
+```powershell
+Copy-Item .env.example .env
+powershell -ExecutionPolicy Bypass -File utils\run_minio.ps1
+```
+
+Остальные команды `uv run ...` и `docker compose ...` одинаковы на всех
+системах.
 
 ---
 
@@ -177,7 +245,7 @@ uv run python utils/compare_formats.py
 
 ### Тесты
 
-```powershell
+```bash
 uv run pytest
 ```
 
@@ -210,5 +278,6 @@ Space-Track `GP` — раз в час, `SATCAT` и `DECAY` — раз в ден�
 
 - [`PLAN.md`](PLAN.md) — десять этапов проекта с подэтапами и статусами.
 - [`BACKLOG.md`](BACKLOG.md) — задачи, которые выполняются сейчас.
+- [`docs/storage.md`](docs/storage.md) — роли хранилищ, ключи, лимиты, восстановление.
 - [`COMMIT_RULES.md`](COMMIT_RULES.md) — формат и правила коммитов.
 - [`NOTES.md`](NOTES.md) — рабочие заметки.
