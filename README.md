@@ -177,15 +177,43 @@ docker compose ps
 ### MinIO (локально, без Docker)
 
 Установка Go и сборка MinIO описаны в
-[`MINIO_INSTALL_LOCAL.md`](MINIO_INSTALL_LOCAL.md). Запуск (порты и ключи
-берутся из `S3_MINIO_*` в `.env`):
+[`MINIO_INSTALL_LOCAL.md`](MINIO_INSTALL_LOCAL.md). Порты и ключи берутся
+из `S3_MINIO_*` в `.env`. Запуск выполняется из корня проекта, сервер
+работает, пока открыто окно терминала, остановка: `Ctrl+C`.
+
+macOS и Linux:
 
 ```bash
 chmod +x utils/run_minio.sh
 ./utils/run_minio.sh
 ```
 
-Остановка: `Ctrl+C` в окне с сервером.
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File utils\run_minio.ps1
+```
+
+Ключ `-ExecutionPolicy Bypass` действует только на этот запуск.
+
+Первая установка на Windows (один раз; после установки Go терминал или
+PyCharm нужно закрыть и открыть заново):
+
+```powershell
+winget install --id GoLang.Go -e
+go version
+go install github.com/minio/minio@latest
+```
+
+Проверка, что MinIO работает (второе окно терминала, порт из
+`S3_MINIO_PORT`):
+
+```bash
+curl -i http://127.0.0.1:<S3_MINIO_PORT>/minio/health/live
+```
+
+На Windows используй `curl.exe` вместо `curl`. Ожидаемый ответ:
+`HTTP/1.1 200 OK`.
 
 ### Проверка хранилищ
 
