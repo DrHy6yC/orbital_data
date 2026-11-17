@@ -204,6 +204,13 @@ uv run --env-file .env python utils/check_s3.py
 uv run --env-file .env python utils/check_s3.py --list
 ```
 
+Дублирование Bronze и Silver в MinIO (направление RustFS → MinIO):
+
+```bash
+uv run --env-file .env python utils/sync_storage.py --dry-run
+uv run --env-file .env python utils/sync_storage.py
+```
+
 Доступ к облаку и план резервного копирования:
 
 ```bash

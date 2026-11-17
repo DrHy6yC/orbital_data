@@ -264,6 +264,14 @@ uv run --env-file .env python utils/check_s3.py
 uv run --env-file .env python utils/check_s3.py --list
 ```
 
+Копирование объектов `bronze` и `silver` из RustFS в MinIO. Ничего
+не удаляет, повторный запуск ничего не копирует, сравнение по размеру:
+
+```bash
+uv run --env-file .env python utils/sync_storage.py --dry-run
+uv run --env-file .env python utils/sync_storage.py
+```
+
 ### Команды запуска
 
 Все команды выполняются из корня проекта.
