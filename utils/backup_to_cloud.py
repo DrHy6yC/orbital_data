@@ -346,6 +346,7 @@ def backup_postgres(
         )
         return total, False
 
+    checksum = hashlib.sha256(result.stdout).hexdigest()
     data = gzip.compress(result.stdout)  # дамп небольшой, держим в памяти
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
     key = f"{CLOUD_POSTGRES_PREFIX}{db}_{stamp}.sql.gz"
@@ -357,7 +358,12 @@ def backup_postgres(
     if dry_run:
         print(f"[ПРОБНЫЙ ЗАПУСК] {key} ({len(data)} байт)")
     else:
-        cloud.put_object(Bucket=settings["bucket"], Key=key, Body=data)
+        cloud.put_object(
+            Bucket=settings["bucket"],
+            Key=key,
+            Body=data,
+            Metadata={"sha256": checksum},
+        )
         stats["put"] += 1
         stats["bytes"] += len(data)
         print(f"[OK] {key} ({len(data)} байт)")
