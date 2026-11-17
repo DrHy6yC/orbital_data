@@ -153,6 +153,18 @@ def format_size(size: int) -> str:
     return f"{size / MIB:.2f} МиБ"
 
 
+def stored_checksum(metadata: dict[str, str]) -> str:
+    """Возвращает sha256 из метаданных независимо от регистра ключа.
+
+    Yandex Object Storage отдаёт ключ как Sha256, другие хранилища
+    могут отдавать sha256, поэтому сравниваем без учёта регистра.
+    """
+    for name, value in metadata.items():
+        if name.lower() == "sha256":
+            return value.strip()
+    return ""
+
+
 def check_object(
     client: BaseClient,
     bucket: str,
@@ -162,7 +174,7 @@ def check_object(
     """Проверяет скачивание, распаковку и sha256 одного объекта."""
     archive_path = Path(temp_directory) / "backup_object.gz"
     head = client.head_object(Bucket=bucket, Key=key)
-    stored = head["Metadata"].get("sha256", "").strip()
+    stored = stored_checksum(head.get("Metadata", {}))
     packed = download_object(client, bucket, key, archive_path)
     actual, unpacked = unpacked_sha256(archive_path)
     print(key)
