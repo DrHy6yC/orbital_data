@@ -198,6 +198,12 @@ PUT, POST, PATCH, LIST и 100 000 операций GET, HEAD, OPTIONS в мес�
 uv run --env-file .env python utils/check_s3.py
 ```
 
+Список бакетов и объектов без изменения данных:
+
+```bash
+uv run --env-file .env python utils/check_s3.py --list
+```
+
 Доступ к облаку и план резервного копирования:
 
 ```bash

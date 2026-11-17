@@ -13,6 +13,10 @@ from orbital_data.collectors.celestrak import CelesTrakClient
 from orbital_data.collectors.errors import SourceStopped
 from orbital_data.collectors.space_track import SpaceTrackClient
 from orbital_data.source_snapshots.save import save_original
+from orbital_data.source_snapshots.upload import (
+    SnapshotUploader,
+    UploadError,
+)
 
 CELESTRAK_DATASETS = {
     "STATIONS": ("celestrak/gp_stations", "csv"),
@@ -28,9 +32,10 @@ SPACE_TRACK_DATASETS = {
 
 @dataclass
 class DownloadResult:
-    """Что сохранено и на чём остановился каждый источник."""
+    """Что сохранено, куда выгружено и на чём остановился источник."""
 
     datasets: dict[str, Path] = field(default_factory=dict)
+    uploads: dict[str, str] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
 
 
@@ -38,6 +43,7 @@ def download_datasets(
     celestrak_client: CelesTrakClient,
     space_track_client: SpaceTrackClient,
     data_directory: Path,
+    uploader: SnapshotUploader | None = None,
 ) -> DownloadResult:
     """Скачивает наборы по источникам и сразу сохраняет каждый.
 
@@ -56,6 +62,7 @@ def download_datasets(
             result.errors["celestrak"] = str(error)
             break
         result.datasets[folder] = save_original(body, file_path)
+        upload_snapshot(result, uploader, folder, file_path, data_directory)
     for api_class, (folder, extension) in SPACE_TRACK_DATASETS.items():
         file_path = make_dataset_path(
             data_directory, folder, extension, timestamp
@@ -66,6 +73,7 @@ def download_datasets(
             result.errors["space_track"] = str(error)
             break
         result.datasets[folder] = save_original(body, file_path)
+        upload_snapshot(result, uploader, folder, file_path, data_directory)
     return result
 
 
@@ -82,3 +90,19 @@ def make_dataset_path(
 def current_timestamp() -> str:
     """Время получения в UTC в виде, пригодном для имени файла."""
     return datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
+
+
+def upload_snapshot(
+    result: DownloadResult,
+    uploader: SnapshotUploader | None,
+    folder: str,
+    file_path: Path,
+    data_directory: Path,
+) -> None:
+    """Выгружает снимок в Bronze, если загрузчик передан."""
+    if uploader is None:
+        return
+    try:
+        result.uploads[folder] = uploader.upload(file_path, data_directory)
+    except UploadError as error:
+        result.errors[f"upload:{folder}"] = str(error)

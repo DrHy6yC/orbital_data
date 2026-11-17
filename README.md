@@ -259,6 +259,9 @@ curl -i http://127.0.0.1:<S3_MINIO_PORT>/minio/health/live
 
 ```bash
 uv run --env-file .env python utils/check_s3.py
+
+# Показать бакеты и объекты без записи и удаления:
+uv run --env-file .env python utils/check_s3.py --list
 ```
 
 ### Команды запуска
@@ -271,7 +274,8 @@ uv run --env-file .env python utils/check_s3.py
 uv run --env-file .env python utils/check_connection.py
 ```
 
-Загрузка пяти наборов и запись снимков в `data/`.
+Загрузка пяти наборов: снимки пишутся в `data/` и выгружаются в бакет
+`bronze` RustFS. Скрипт печатает ключ каждого объекта.
 
 ```bash
 uv run --env-file .env python utils/check_download.py
@@ -353,6 +357,11 @@ Space-Track `GP` — раз в час, `SATCAT` и `DECAY` — раз в ден�
 
 Снимки источников: `data/<источник>/<набор>/<время UTC>.ext`, например
 `data/space_track/gp/2026-11-15T10-10-00Z.json`.
+
+После сохранения каждый снимок выгружается в Bronze RustFS под тем же
+ключом без `data/`: `bronze/space_track/gp/2026-11-15T10-10-00Z.json`.
+Ошибка выгрузки не удаляет локальный файл и не мешает загрузить
+остальные наборы: ключ проблемы выглядит как `upload:<набор>`.
 
 Файлы исследований: `data/research/celestrak/` — ответы, журналы запросов
 и отчёт о сверке форматов.

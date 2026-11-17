@@ -23,6 +23,7 @@
 Скрипт не удаляет бакеты и не трогает объекты вне папки _healthcheck/.
 """
 
+import argparse
 import hashlib
 import io
 import os
@@ -173,6 +174,35 @@ def cleanup(client, keys: list[str]) -> str:
     return ""
 
 
+def list_objects(name: str) -> bool:
+    """Печатает бакеты и объекты одного хранилища."""
+    values, missing = read_settings(name)
+    if missing:
+        print(f"ОШИБКА: не заданы переменные: {', '.join(missing)}")
+        return False
+    endpoint = f"http://{values['HOST']}:{values['PORT']}"
+    client = make_client(endpoint, values["ACCESS_KEY"], values["SECRET_KEY"])
+    buckets = client.list_buckets()["Buckets"]
+    if not buckets:
+        print("бакетов нет")
+        return True
+    for bucket in buckets:
+        bucket_name = bucket["Name"]
+        print(f"== {bucket_name} ==")
+        objects = client.list_objects_v2(Bucket=bucket_name).get(
+            "Contents", []
+        )
+        if not objects:
+            print("  объектов нет")
+        for item in objects:
+            changed = item["LastModified"]
+            print(
+                f"  {item['Key']}  {item['Size']} байт  "
+                f"{changed:%Y-%m-%d %H:%M}"
+            )
+    return True
+
+
 def check_storage(name: str) -> dict:
     """Проверяет одно хранилище. Возвращает {шаг: (успех, подробности)}."""
     results = {}
@@ -247,6 +277,15 @@ def print_summary(all_results: dict) -> bool:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Проверка S3-хранилищ, описанных в .env",
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="показать бакеты и объекты без проверки записи",
+    )
+    args = parser.parse_args()
     names = find_storages()
     if not names:
         sys.exit(
@@ -254,18 +293,16 @@ def main() -> None:
             "Добавь хранилище в .env (HOST, PORT, ACCESS_KEY, SECRET_KEY) "
             "и запусти через uv run --env-file .env"
         )
+    if args.list:
+        all_ok = True
+        for name in names:
+            print(f"\n== {name.lower()} ==")
+            if not list_objects(name):
+                all_ok = False
+        sys.exit(0 if all_ok else 1)
     print(
         f"Найдено хранилищ: {len(names)} ({', '.join(name.lower() for name in names)})"
     )
-
-    all_results = {}
-    for name in names:
-        print(f"\n== {name.lower()} ==")
-        all_results[name.lower()] = check_storage(name)
-
-    all_ok = print_summary(all_results)
-    print("\nПроверка пройдена" if all_ok else "\nПроверка не пройдена")
-    sys.exit(0 if all_ok else 1)
 
 
 if __name__ == "__main__":

@@ -11,11 +11,27 @@ from orbital_data.collectors.download import (
     make_dataset_path,
 )
 from orbital_data.collectors.space_track import SpaceTrackClient
+from orbital_data.source_snapshots.upload import UploadError
 
 CSV_BODY = b"OBJECT_NAME,OBJECT_ID\nISS (ZARYA),1998-067A\n"
 JSON_BODY = b'[{"NORAD_CAT_ID": "25544"}]'
 LOGIN_PATH = "/ajaxauth/login"
 QUERY_PREFIX = "/basicspacedata/query/class"
+
+
+class FakeUploader:
+    """Запоминает выгрузки и падает на заданном наборе."""
+
+    def __init__(self, failing_prefix: str = "") -> None:
+        self.failing_prefix = failing_prefix
+        self.keys: list[str] = []
+
+    def upload(self, file_path: Path, data_directory: Path) -> str:
+        key = file_path.relative_to(data_directory).as_posix()
+        if self.failing_prefix and key.startswith(self.failing_prefix):
+            raise UploadError("хранилище недоступно")
+        self.keys.append(key)
+        return key
 
 
 def skip_pause(pause: float) -> None:
@@ -151,3 +167,46 @@ def test_timestamp_has_no_colons() -> None:
     timestamp = current_timestamp()
 
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z", timestamp)
+
+
+def test_uploads_every_dataset(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "celestrak.org":
+            return httpx.Response(200, content=CSV_BODY)
+        if request.url.path == LOGIN_PATH:
+            return httpx.Response(200, text="")
+        return httpx.Response(200, content=JSON_BODY)
+
+    celestrak, space_track = make_clients(handler)
+    uploader = FakeUploader()
+    result = download_datasets(celestrak, space_track, tmp_path, uploader)
+
+    assert result.errors == {}
+    assert list(result.uploads) == list(result.datasets)
+    assert result.uploads["celestrak/gp_stations"].startswith(
+        "celestrak/gp_stations/"
+    )
+    assert result.uploads["celestrak/gp_stations"].endswith(".csv")
+    assert result.uploads["space_track/gp"].endswith(".json")
+    assert uploader.keys == list(result.uploads.values())
+
+
+def test_keeps_snapshot_when_upload_fails(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "celestrak.org":
+            return httpx.Response(200, content=CSV_BODY)
+        if request.url.path == LOGIN_PATH:
+            return httpx.Response(200, text="")
+        return httpx.Response(200, content=JSON_BODY)
+
+    celestrak, space_track = make_clients(handler)
+    uploader = FakeUploader(failing_prefix="space_track/gp")
+    result = download_datasets(celestrak, space_track, tmp_path, uploader)
+
+    assert list(result.errors) == ["upload:space_track/gp"]
+    assert "хранилище недоступно" in result.errors["upload:space_track/gp"]
+    assert "space_track/gp" in result.datasets
+    assert result.datasets["space_track/gp"].exists()
+    assert "space_track/gp" not in result.uploads
+    assert "space_track/satcat" in result.uploads
+    assert "space_track/decay" in result.uploads
