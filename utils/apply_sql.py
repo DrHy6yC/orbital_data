@@ -47,9 +47,7 @@ def collect_files(names: list[str]) -> list[Path]:
     return files
 
 
-def apply_files(
-    connection: psycopg.Connection, files: list[Path]
-) -> int:
+def apply_files(connection: psycopg.Connection, files: list[Path]) -> int:
     """Выполняет файлы по очереди. Возвращает число применённых."""
     applied = 0
     with connection.cursor() as cursor:
