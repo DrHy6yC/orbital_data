@@ -304,6 +304,15 @@ def main() -> None:
         f"Найдено хранилищ: {len(names)} ({', '.join(name.lower() for name in names)})"
     )
 
+    all_results = {}
+    for name in names:
+        print(f"\n== {name.lower()} ==")
+        all_results[name.lower()] = check_storage(name)
+
+    all_ok = print_summary(all_results)
+    print("\nПроверка пройдена" if all_ok else "\nПроверка не пройдена")
+    sys.exit(0 if all_ok else 1)
+
 
 if __name__ == "__main__":
     main()
