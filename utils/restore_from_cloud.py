@@ -104,10 +104,12 @@ def mark_restored(
         print(f"метаданные: ошибка — {error}")
 
 
-def show_plan(cloud: BaseClient, bucket: str, cloud_keys: list[str]) -> None:
+def show_plan(
+    cloud: BaseClient, cloud_bucket: str, cloud_keys: list[str]
+) -> None:
     """Печатает, что будет восстановлено, без скачивания."""
     for cloud_key in cloud_keys:
-        head = cloud.head_object(Bucket=bucket, Key=cloud_key)
+        head = cloud.head_object(Bucket=cloud_bucket, Key=cloud_key)
         packed = head["ContentLength"]
         print(f"восстановил бы: {BRONZE_BUCKET}/{rustfs_key(cloud_key)}")
         print(f"  из {cloud_key}, сжато {format_size(packed)}")
@@ -133,10 +135,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    bucket = read_required_env("BACKUP_S3_BUCKET")
+    cloud_bucket = read_required_env("BACKUP_S3_BUCKET")
     cloud = make_cloud_client()
     try:
-        cloud_keys = list_cloud_keys(cloud, bucket)
+        cloud_keys = list_cloud_keys(cloud, cloud_bucket)
     except (ClientError, BotoCoreError) as error:
         sys.exit(f"[ОШИБКА] не удалось прочитать бакет: {error}")
 
@@ -147,7 +149,7 @@ def main() -> None:
         sys.exit("В облаке нет снимков для восстановления")
 
     if args.dry_run:
-        show_plan(cloud, bucket, selected)
+        show_plan(cloud, cloud_bucket, selected)
         return
 
     try:
@@ -169,7 +171,7 @@ def main() -> None:
                 size = restore_object(
                     cloud,
                     storage,
-                    bucket,
+                    cloud_bucket,
                     cloud_key,
                     Path(temp_directory),
                     checksums,

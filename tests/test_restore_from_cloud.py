@@ -6,6 +6,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from orbital_data.cloud_restore import (
+    BRONZE_BUCKET,
     dataset_of,
     newest_keys,
     parse_dataset,
@@ -16,6 +17,7 @@ from orbital_data.cloud_restore import (
 PAYLOAD = b"norad_id,epoch\n25544,2026-11-17\n"
 CLOUD_KEY = "bronze/celestrak/gp_stations/2026-11-17T17-55-54Z.csv.gz"
 STORAGE_KEY = "celestrak/gp_stations/2026-11-17T17-55-54Z.csv"
+CLOUD_BUCKET = "cloud-backup"
 
 
 class FakeCloud:
@@ -24,8 +26,10 @@ class FakeCloud:
     def __init__(self, body: bytes, metadata: dict[str, str]) -> None:
         self.body = body
         self.metadata = metadata
+        self.requested_buckets: list[str] = []
 
     def head_object(self, Bucket: str, Key: str) -> dict:
+        self.requested_buckets.append(Bucket)
         return {"ContentLength": len(self.body), "Metadata": self.metadata}
 
     def download_file(
@@ -35,6 +39,7 @@ class FakeCloud:
         target_path: str,
         Config: object | None = None,
     ) -> None:
+        self.requested_buckets.append(bucket)
         Path(target_path).write_bytes(self.body)
 
 
@@ -143,18 +148,35 @@ def test_restore_object_uploads_and_returns_size(tmp_path: Path) -> None:
     storage = FakeStorage()
 
     size = restore_object(
-        make_cloud(), storage, "bronze", CLOUD_KEY, tmp_path, {}
+        make_cloud(), storage, CLOUD_BUCKET, CLOUD_KEY, tmp_path, {}
     )
 
     assert size == len(PAYLOAD)
-    assert storage.buckets["bronze"][STORAGE_KEY] == PAYLOAD
+    assert storage.buckets[BRONZE_BUCKET][STORAGE_KEY] == PAYLOAD
+
+
+def test_restore_object_uses_cloud_bucket_only_for_cloud(
+    tmp_path: Path,
+) -> None:
+    cloud = make_cloud()
+    storage = FakeStorage()
+
+    restore_object(cloud, storage, CLOUD_BUCKET, CLOUD_KEY, tmp_path, {})
+
+    assert set(cloud.requested_buckets) == {CLOUD_BUCKET}
+    assert list(storage.buckets) == [BRONZE_BUCKET]
 
 
 def test_restore_object_rejects_metadata_mismatch(tmp_path: Path) -> None:
     storage = FakeStorage()
 
     size = restore_object(
-        make_cloud("0" * 64), storage, "bronze", CLOUD_KEY, tmp_path, {}
+        make_cloud("0" * 64),
+        storage,
+        CLOUD_BUCKET,
+        CLOUD_KEY,
+        tmp_path,
+        {},
     )
 
     assert size is None
@@ -166,7 +188,12 @@ def test_restore_object_rejects_database_mismatch(tmp_path: Path) -> None:
     checksums = {STORAGE_KEY: "0" * 64}
 
     size = restore_object(
-        make_cloud(), storage, "bronze", CLOUD_KEY, tmp_path, checksums
+        make_cloud(),
+        storage,
+        CLOUD_BUCKET,
+        CLOUD_KEY,
+        tmp_path,
+        checksums,
     )
 
     assert size is None
@@ -175,10 +202,10 @@ def test_restore_object_rejects_database_mismatch(tmp_path: Path) -> None:
 
 def test_restore_object_skips_existing_object(tmp_path: Path) -> None:
     storage = FakeStorage()
-    storage.buckets["bronze"] = {STORAGE_KEY: PAYLOAD}
+    storage.buckets[BRONZE_BUCKET] = {STORAGE_KEY: PAYLOAD}
 
     size = restore_object(
-        make_cloud(), storage, "bronze", CLOUD_KEY, tmp_path, {}
+        make_cloud(), storage, CLOUD_BUCKET, CLOUD_KEY, tmp_path, {}
     )
 
     assert size == len(PAYLOAD)

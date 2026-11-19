@@ -1,9 +1,11 @@
 """Восстановление снимков Bronze из облака в основное хранилище.
 
 Модуль отвечает за имена ключей и за одну операцию восстановления:
-скачать объект бэкапа, распаковать gzip, сверить sha256 с метаданными
-объекта и с записью в базе, загрузить файл в RustFS. Разбор
-аргументов и печать плана остаются в utils/restore_from_cloud.py.
+скачать объект бэкапа из облачного бакета, распаковать gzip, сверить
+sha256 с метаданными объекта и с записью в базе, загрузить файл
+в бакет BRONZE_BUCKET основного хранилища. Имя облачного бакета
+в модуль передаётся снаружи и для записи не используется.
+Разбор аргументов и печать плана остаются в utils/restore_from_cloud.py.
 """
 
 import gzip
@@ -75,22 +77,27 @@ def rustfs_key(cloud_key: str) -> str:
 def restore_object(
     cloud: BaseClient,
     storage: BaseClient,
-    bucket: str,
+    cloud_bucket: str,
     cloud_key: str,
     temp_directory: Path,
     checksums: dict[str, str],
 ) -> int | None:
-    """Проверяет объект облака и загружает его в RustFS.
+    """Проверяет объект облака и загружает его в бакет bronze.
 
-    Возвращает размер распакованного файла или None при ошибке.
+    cloud_bucket — имя бакета в облаке, storage — клиент RustFS.
+    В RustFS объект всегда попадает в BRONZE_BUCKET, поэтому имена
+    бакетов не могут перепутаться. Возвращает размер распакованного
+    файла или None при ошибке.
     """
     key = rustfs_key(cloud_key)
     stored = stored_checksum(
-        cloud.head_object(Bucket=bucket, Key=cloud_key).get("Metadata", {})
+        cloud.head_object(Bucket=cloud_bucket, Key=cloud_key).get(
+            "Metadata", {}
+        )
     )
     archive_path = temp_directory / "restore_object.gz"
     unpacked_path = temp_directory / "restore_object"
-    packed = download_object(cloud, bucket, cloud_key, archive_path)
+    packed = download_object(cloud, cloud_bucket, cloud_key, archive_path)
     with gzip.open(archive_path, "rb") as source:
         with unpacked_path.open("wb") as target:
             shutil.copyfileobj(source, target)
@@ -119,14 +126,14 @@ def restore_object(
     else:
         print("  [OK] sha256 совпал с базой")
 
-    if read_object_size(storage, bucket, key) == size:
+    if read_object_size(storage, BRONZE_BUCKET, key) == size:
         print(f"  уже на месте: {BRONZE_BUCKET}/{key}")
         return size
 
-    ensure_bucket(storage, bucket)
+    ensure_bucket(storage, BRONZE_BUCKET)
     with unpacked_path.open("rb") as body:
-        storage.upload_fileobj(body, bucket, key)
-    copied = read_object_size(storage, bucket, key)
+        storage.upload_fileobj(body, BRONZE_BUCKET, key)
+    copied = read_object_size(storage, BRONZE_BUCKET, key)
     if copied != size:
         print(f"  [ОШИБКА] после загрузки размер {copied}, ожидался {size}")
         return None
