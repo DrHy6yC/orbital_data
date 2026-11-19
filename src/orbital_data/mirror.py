@@ -3,6 +3,7 @@
 Копирование идёт по тем же ключам. Объект с совпадающим размером
 пропускается, объект с другим размером перезаписывается. Ничего
 не удаляется: лишние объекты в приёмнике остаются на месте.
+Служебные объекты `_healthcheck/` не копируются.
 """
 
 from dataclasses import dataclass, field
@@ -14,6 +15,7 @@ from orbital_data.s3_access import StorageError
 
 BUCKETS = ("bronze", "silver")
 MISSING_CODES = ("404", "NoSuchBucket", "NoSuchKey", "NotFound")
+SKIP_PREFIX = "_healthcheck/"
 
 
 @dataclass
@@ -108,6 +110,8 @@ def mirror_buckets(
             result.errors[bucket] = str(error)
             continue
         for key, size in items:
+            if key.startswith(SKIP_PREFIX):
+                continue
             name = f"{bucket}/{key}"
             try:
                 copied = mirror_object(

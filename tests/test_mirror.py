@@ -121,3 +121,21 @@ def test_records_error_and_continues() -> None:
 
     assert list(result.errors) == ["bronze/celestrak/gp_active/a.csv"]
     assert result.copied == ["bronze/space_track/gp/a.json"]
+
+
+def test_skips_healthcheck_objects() -> None:
+    source = FakeStorage(
+        {
+            "bronze": {
+                "_healthcheck/probe.txt": b"probe",
+                "celestrak/gp_active/a.csv": b"one",
+            },
+        }
+    )
+    target = FakeStorage()
+
+    result = mirror_buckets(source, target, ("bronze",))
+
+    assert result.copied == ["bronze/celestrak/gp_active/a.csv"]
+    assert result.skipped == []
+    assert target.buckets["bronze"] == {"celestrak/gp_active/a.csv": b"one"}

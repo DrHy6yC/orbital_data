@@ -228,10 +228,10 @@ PUT, POST, PATCH, LIST и 100 000 операций GET, HEAD, OPTIONS в мес�
 в `data/`. Проверку выполняет `utils/check_backup_restore.py` (раздел 9).
 Полное развёртывание дампа в пустую базу ещё не проверялось.
 
-1. **Потерян RustFS, MinIO цел.** Скопировать бакеты из MinIO в RustFS,
-   затем сверить листинги. Обратное направление в `utils/sync_storage.py`
-   появится в 4.13; до этого объекты копируются вручную через веб-консоль
-   MinIO (раздел 10).
+1. **Потерян RustFS, MinIO цел.** Скопировать бакеты из MinIO в RustFS
+   командой `uv run --env-file .env python utils/sync_storage.py
+--from MINIO --to RUSTFS`, затем сверить листинги. Копирование ничего не удаляет в MinIO и создаёт
+   отсутствующие бакеты в RustFS.
 2. **Потеряны оба локальных хранилища.** Взять Bronze из Yandex в пределах
    окон хранения:
    - скачать объект по ключу
@@ -275,6 +275,13 @@ uv run --env-file .env python utils/check_s3.py --list
 ```bash
 uv run --env-file .env python utils/sync_storage.py --dry-run
 uv run --env-file .env python utils/sync_storage.py
+```
+
+Восстановление RustFS из MinIO (направление MinIO → RustFS):
+
+```bash
+uv run --env-file .env python utils/sync_storage.py --from MINIO --to RUSTFS --dry-run
+uv run --env-file .env python utils/sync_storage.py --from MINIO --to RUSTFS
 ```
 
 Доступ к облаку, план и полный прогон резервного копирования:

@@ -358,6 +358,15 @@ uv run --env-file .env python utils/sync_storage.py
 
 `--dry-run` показывает план без записи. Копируются отсутствующие объекты и объекты с отличающимся размером, в MinIO ничего не удаляется. Повторный запуск ничего не копирует. Ключ `--bucket bronze` ограничивает работу одним бакетом.
 
+Направление задают ключи `--from` и `--to` со значениями `RUSTFS` и `MINIO`; без них копирование идёт из RustFS в MinIO. Одинаковые источник и приёмник отклоняются с кодом возврата 2. Служебные объекты `_healthcheck/` не копируются. Копии объектов Bronze отмечаются в `orbital.snapshot_copies` только при приёмнике MinIO: строки `rustfs` пишет загрузчик.
+
+Обратное направление восстанавливает RustFS из MinIO: если бакеты в RustFS потеряны, их содержимое приходит из дубля.
+
+```bash
+uv run --env-file .env python utils/sync_storage.py --from MINIO --to RUSTFS --dry-run
+uv run --env-file .env python utils/sync_storage.py --from MINIO --to RUSTFS
+```
+
 ### 7.13. Резервное копирование в Yandex
 
 Скрипт копирует снимки Bronze в `bronze/` облачного бакета и дамп PostgreSQL
