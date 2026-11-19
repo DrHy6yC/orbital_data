@@ -44,7 +44,7 @@ DATA_DIRECTORY = PROJECT_ROOT / "data"
 CLOUD_POSTGRES_PREFIX = "postgres/"
 MIB = 1024 * 1024
 CHUNK_SIZE = 1024 * 1024
-# Объекты до 64 МиБ скачиваются одним запросом, а не частями.
+# Объекты до 64 МБ скачиваются одним запросом, а не частями.
 DOWNLOAD_CONFIG = TransferConfig(multipart_threshold=64 * MIB)
 
 
@@ -147,10 +147,10 @@ def local_sha256(file_path: Path) -> str:
 
 
 def format_size(size: int) -> str:
-    """Печатает размер в байтах или МиБ, смотря что понятнее."""
+    """Печатает размер в байтах или МБ, смотря что понятнее."""
     if size < MIB:
         return f"{size} байт"
-    return f"{size / MIB:.2f} МиБ"
+    return f"{size / MIB:.2f} МБ"
 
 
 def stored_checksum(metadata: dict[str, str]) -> str:

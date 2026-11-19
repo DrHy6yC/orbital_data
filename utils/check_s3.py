@@ -14,7 +14,7 @@
 1. доступ по ключам (показывает, какой сервер ответил);
 2. создание бакетов bronze, silver, если их нет;
 3. запись, чтение и листинг небольшого объекта;
-4. многочастная загрузка (11 МиБ тремя частями) с проверкой хеша;
+4. многочастная загрузка (11 МБ тремя частями) с проверкой хеша;
 5. удаление тестовых объектов.
 
 Запуск из корня проекта:
@@ -149,7 +149,7 @@ def check_roundtrip(client, key: str) -> str:
 def check_multipart(client, key: str) -> str:
     payload = os.urandom(11 * MIB)
     expected_hash = hashlib.sha256(payload).hexdigest()
-    # Порог и размер части по 5 МиБ: 11 МиБ уйдут тремя частями.
+    # Порог и размер части по 5 МБ: 11 МБ уйдут тремя частями.
     transfer = TransferConfig(
         multipart_threshold=5 * MIB, multipart_chunksize=5 * MIB
     )
@@ -161,7 +161,7 @@ def check_multipart(client, key: str) -> str:
     assert hashlib.sha256(received).hexdigest() == expected_hash, (
         "хеш не совпадает"
     )
-    return "11 МиБ тремя частями, хеш совпал"
+    return "11 МБ тремя частями, хеш совпал"
 
 
 def cleanup(client, keys: list[str]) -> str:

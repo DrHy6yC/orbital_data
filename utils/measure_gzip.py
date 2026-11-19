@@ -60,15 +60,15 @@ def show_table(
         average = packed_mib / counts[name]
         print(
             f"{name}: снимков {counts[name]}, "
-            f"{raw_mib:.2f} МиБ -> {packed_mib:.2f} МиБ, "
+            f"{raw_mib:.2f} МБ -> {packed_mib:.2f} МБ, "
             f"сжатие {ratio:.2f}, "
-            f"в среднем {average:.2f} МиБ на снимок"
+            f"в среднем {average:.2f} МБ на снимок"
         )
     total_raw = sum(raw_sizes.values())
     total_packed = sum(packed_sizes.values())
     print(
-        f"всего: {total_raw / MIB:.2f} МиБ -> "
-        f"{total_packed / MIB:.2f} МиБ, "
+        f"всего: {total_raw / MIB:.2f} МБ -> "
+        f"{total_packed / MIB:.2f} МБ, "
         f"сжатие {total_raw / total_packed:.2f}"
     )
 

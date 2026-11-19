@@ -21,7 +21,7 @@ BACKUP_KEEP_<НАБОР>_DAYS и только после успешной заг
     BACKUP_S3_ACCESS_KEY, BACKUP_S3_SECRET_KEY   облачный бакет
     BACKUP_SOURCE        имя локального хранилища (по умолчанию RUSTFS),
                          читаются S3_<ИМЯ>_HOST, _PORT, _ACCESS_KEY, _SECRET_KEY
-    BACKUP_MAX_MB        лимит размера бакета в МиБ (по умолчанию 800)
+    BACKUP_MAX_MB        лимит размера бакета в МБ (по умолчанию 800)
     BACKUP_KEEP_DUMPS    сколько дампов хранить (по умолчанию 7)
     POSTGRES_USER, POSTGRES_DB   для дампа (контейнер postgres должен работать)
 
@@ -62,7 +62,7 @@ SOURCE_BUCKET = "bronze"
 CLOUD_BRONZE_PREFIX = "bronze/"
 CLOUD_POSTGRES_PREFIX = "postgres/"
 SKIP_PREFIX = "_healthcheck/"  # служебные объекты проверки, их не копируем
-# Объекты до 64 МиБ загружаются одним запросом (меньше операций PUT).
+# Объекты до 64 МБ загружаются одним запросом (меньше операций PUT).
 UPLOAD_CONFIG = TransferConfig(
     multipart_threshold=64 * MIB, multipart_chunksize=64 * MIB
 )
@@ -222,7 +222,7 @@ def show_plan(
     freed = sum(cloud_all[key] for key in plan.expired)
     print(
         f"Просрочено по окнам хранения: {len(plan.expired)} объектов, "
-        f"{freed / MIB:.2f} МиБ"
+        f"{freed / MIB:.2f} МБ"
     )
     if is_dry_run:
         for key in plan.expired:
@@ -291,7 +291,7 @@ def backup_bronze(
             if total + packed_size > settings["max_bytes"]:
                 print(
                     f"[СТОП] {key}: бакет превысил бы лимит "
-                    f"{settings['max_bytes'] // MIB} МиБ"
+                    f"{settings['max_bytes'] // MIB} МБ"
                 )
                 return total, False
             cloud_key = CLOUD_BRONZE_PREFIX + key + GZIP_SUFFIX
@@ -311,7 +311,7 @@ def backup_bronze(
             total += packed_size
             print(
                 f"[OK] {key} -> {cloud_key} "
-                f"({size / MIB:.2f} МиБ -> {packed_size / MIB:.2f} МиБ)"
+                f"({size / MIB:.2f} МБ -> {packed_size / MIB:.2f} МБ)"
             )
     return total, True
 
@@ -352,7 +352,7 @@ def backup_postgres(
     key = f"{CLOUD_POSTGRES_PREFIX}{db}_{stamp}.sql.gz"
     if total + len(data) > settings["max_bytes"]:
         print(
-            f"[СТОП] дамп ({len(data) / MIB:.2f} МиБ) превысил бы лимит бакета"
+            f"[СТОП] дамп ({len(data) / MIB:.2f} МБ) превысил бы лимит бакета"
         )
         return total, False
     if dry_run:
@@ -418,8 +418,8 @@ def main() -> None:
             cloud_all = list_objects(cloud, settings["bucket"], cloud=True)
             total = sum(cloud_all.values())
             print(
-                f"Облачный бакет: {total / MIB:.2f} МиБ "
-                f"из {settings['max_bytes'] // MIB} МиБ"
+                f"Облачный бакет: {total / MIB:.2f} МБ "
+                f"из {settings['max_bytes'] // MIB} МБ"
             )
             if args.only in (None, "bronze"):
                 plan = expired_keys(
@@ -454,13 +454,13 @@ def main() -> None:
             if not args.dry_run:
                 listed = list_objects(cloud, settings["bucket"], cloud=True)
                 total = sum(listed.values())
-            print(f"Размер бакета после копирования: {total / MIB:.2f} МиБ")
+            print(f"Размер бакета после копирования: {total / MIB:.2f} МБ")
     except (ClientError, BotoCoreError) as error:
         sys.exit(f"[ОШИБКА] {error}")
 
     operations = stats["put"] + stats["list"] + stats["delete"]
     print(
-        f"За запуск: загружено {stats['bytes'] / MIB:.2f} МиБ, "
+        f"За запуск: загружено {stats['bytes'] / MIB:.2f} МБ, "
         f"операций записи, удаления и листинга {operations} "
         f"(бесплатно 10 000 в месяц)"
     )

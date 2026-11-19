@@ -362,7 +362,7 @@ uv run --env-file .env python utils/sync_storage.py
 
 Скрипт копирует снимки Bronze в `bronze/` облачного бакета и дамп PostgreSQL
 в `postgres/`. Снимки сжимаются gzip перед отправкой: десять объектов заняли
-33,73 МиБ вместо 302,81 МиБ.
+33,73 МБ вместо 302,81 МБ.
 
 ```bash
 uv run --env-file .env python utils/backup_to_cloud.py --check
@@ -395,7 +395,7 @@ postgres/<база>_<время>.sql.gz
 описаны в [docs/storage.md](docs/storage.md), раздел 7.3.
 
 Перед загрузкой скрипт проверяет лимит `BACKUP_MAX_MB` (по умолчанию
-800 МиБ): бесплатный уровень Yandex вмещает около 1 ГБ. В `postgres/`
+800 МБ): бесплатный уровень Yandex вмещает около 1 ГБ. В `postgres/`
 хранятся последние `BACKUP_KEEP_DUMPS` дампов, по умолчанию 7.
 
 Проверить, что копия восстанавливается:
