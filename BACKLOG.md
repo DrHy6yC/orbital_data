@@ -8,6 +8,7 @@
 ### 4.14. Восстановление Bronze из Yandex
 
 **Файл и место:** `src/orbital_data/cloud_objects.py` (новый),
+`src/orbital_data/cloud_restore.py` (новый),
 `src/orbital_data/source_snapshots/registry.py`,
 `utils/restore_from_cloud.py` (новый),
 `utils/check_backup_restore.py`, `tests/test_restore_from_cloud.py`,
@@ -129,9 +130,8 @@ gzip в `tmp_path`, пропуск объекта с расхождением `s
 - снимок искать по исходному ключу: убрать `bronze/` и `.gz`;
 - дампы PostgreSQL не отмечаются: у них нет строки в `snapshots`;
 - ошибка базы не должна прерывать бэкап, только печататься;
-- после этого в `docs/storage.md` в разделе 8.2 заменить «записи
-  в `snapshot_copies` для облачных копий появятся в 4.15» на сверку
-  с этими записями.
+- после этого в `docs/storage.md` в разделе 8.2 добавить, что
+  восстановление сверяется и с записью `yandex` в `snapshot_copies`.
 
 **Ожидаемый результат:** по снимку видно копию в Yandex и её размер.
 

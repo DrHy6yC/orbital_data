@@ -95,6 +95,43 @@ def save_copy_for_key(
         return cursor.rowcount > 0
 
 
+def snapshot_checksums(
+    connection: psycopg.Connection, object_keys: list[str]
+) -> dict[str, str]:
+    """Возвращает сохранённые sha256 снимков по ключам объектов."""
+    if not object_keys:
+        return {}
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT storage_path, checksum_sha256 FROM orbital.snapshots "
+            "WHERE storage_path = ANY(%s)",
+            (object_keys,),
+        )
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
+
+def ensure_primary_copy(
+    connection: psycopg.Connection, object_key: str, file_size_bytes: int
+) -> bool:
+    """Отмечает копию в основном хранилище, если снимок известен.
+
+    В отличие от save_copy_for_key строка создаётся с нуля: после
+    восстановления RustFS копии в основном хранилище может не быть,
+    и брать её неоткуда. Если снимка нет в snapshots, ничего
+    не пишется.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO orbital.snapshot_copies (snapshot_id, "
+            "storage, object_key, file_size_bytes, status, copied_at) "
+            "SELECT snapshot_id, %s, %s, %s, 'ok', now() "
+            "FROM orbital.snapshots WHERE storage_path = %s "
+            "ON CONFLICT (snapshot_id, storage) DO NOTHING",
+            (PRIMARY_STORAGE, object_key, file_size_bytes, object_key),
+        )
+        return cursor.rowcount > 0
+
+
 def last_fetch_times(connection: psycopg.Connection) -> dict[str, datetime]:
     """Возвращает время последнего снимка по коду набора."""
     with connection.cursor() as cursor:

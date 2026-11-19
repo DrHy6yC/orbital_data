@@ -418,6 +418,21 @@ uv run --env-file .env python utils/check_backup_restore.py
 в `data/`. Ключ `--key <ключ>` проверяет один объект, `--all` — весь бэкап.
 В облаке ничего не меняется: только LIST, HEAD и GET.
 
+Восстановить Bronze из облака в RustFS:
+
+```bash
+uv run --env-file .env python utils/restore_from_cloud.py --dry-run
+uv run --env-file .env python utils/restore_from_cloud.py
+uv run --env-file .env python utils/restore_from_cloud.py --dataset space_track/gp
+```
+
+Скрипт берёт последний снимок каждого набора, распаковывает gzip, сверяет
+`sha256` с метаданными объекта и с `snapshots`, кладёт файл в бакет
+`bronze` и отмечает копию `rustfs` в `snapshot_copies`. Объект, который уже
+лежит в RustFS с тем же размером, повторно не загружается. Ключ
+`--dataset <источник>/<набор>` ограничивает работу одним набором,
+`--dry-run` читает только LIST и HEAD.
+
 ## 8. Проверка и тестирование
 
 ### 8.1. Автоматические тесты

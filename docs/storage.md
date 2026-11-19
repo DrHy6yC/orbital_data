@@ -232,18 +232,22 @@ PUT, POST, PATCH, LIST и 100 000 операций GET, HEAD, OPTIONS в мес�
    командой из раздела 9 (`--from MINIO --to RUSTFS`), затем сверить
    листинги. Копирование ничего не удаляет в MinIO и создаёт
    отсутствующие бакеты в RustFS.
-2. **Потеряны оба локальных хранилища.** Взять Bronze из Yandex в пределах
-   окон хранения:
-   - скачать объект по ключу
-     `bronze/<источник>/<набор>/<время>.<расширение>.gz`;
-   - распаковать gzip;
-   - сверить `sha256` с метаданными объекта (`Metadata` в ответе
-     `head_object`, ключ читается без учёта регистра); записи
-     в `snapshot_copies` для облачных копий появятся в 4.15;
-   - загрузить файл в RustFS под исходным ключом без `bronze/`
-     и без суффикса `.gz`.
+2. **Потеряны оба локальных хранилища.** Взять Bronze из Yandex
+   скриптом `utils/restore_from_cloud.py`: он скачивает объект
+   `bronze/<источник>/<набор>/<время>.<расширение>.gz`, распаковывает
+   gzip, сверяет `sha256` с метаданными объекта и с записью
+   `checksum_sha256` в `snapshots`, затем кладёт файл в RustFS
+   без `bronze/` и без `.gz`:
 
-   История за пределами окон потеряна, если её нет в `data/`.
+   ```bash
+   uv run --env-file .env python utils/restore_from_cloud.py --dry-run
+   uv run --env-file .env python utils/restore_from_cloud.py
+   uv run --env-file .env python utils/restore_from_cloud.py --dataset celestrak/gp_stations
+   ```
+
+   Дамп PostgreSQL разворачивается до запуска: без таблицы `snapshots`
+   восстановленные копии не с чем связать. История за пределами окон
+   хранения потеряна, если её нет в `data/`.
 3. **Потерян Silver.** Пересобрать из Bronze (этап 5), затем скопировать
    в MinIO по 4.5.
 4. **Потерян ClickHouse (Gold).** Загрузить Silver (6.4) и выполнить
@@ -303,6 +307,19 @@ uv run --env-file .env python utils/check_backup_restore.py
 Ключ `--key <ключ>` проверяет один объект, `--all` — весь бэкап.
 В облаке выполняются только LIST, HEAD и GET.
 
+Восстановление Bronze из облака в RustFS: скачивает последний снимок
+каждого набора, распаковывает gzip, сверяет `sha256` с метаданными
+объекта и с `snapshots`, загружает файл в бакет `bronze` и отмечает
+копию `rustfs` в `snapshot_copies`:
+
+```bash
+uv run --env-file .env python utils/restore_from_cloud.py --dry-run
+uv run --env-file .env python utils/restore_from_cloud.py
+uv run --env-file .env python utils/restore_from_cloud.py --dataset space_track/gp
+```
+
+Ключ `--dataset <источник>/<набор>` ограничивает работу одним набором,
+`--dry-run` читает только LIST и HEAD и ничего не скачивает.
 
 ## 10. Веб-интерфейсы хранилищ
 
