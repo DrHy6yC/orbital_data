@@ -39,13 +39,35 @@ def parse_key(key: str) -> tuple[str, datetime] | None:
     return dataset, moment.replace(tzinfo=UTC)
 
 
+def find_newest_keys(cloud_objects: dict[str, int]) -> dict[str, str]:
+    """Возвращает самый свежий ключ каждого набора."""
+    latest: dict[str, tuple[datetime, str]] = {}
+    for key in cloud_objects:
+        parsed = parse_key(key)
+        if parsed is None:
+            continue
+        dataset, moment = parsed
+        if dataset not in latest or moment > latest[dataset][0]:
+            latest[dataset] = (moment, key)
+    newest: dict[str, str] = {}
+    for dataset, (_, key) in latest.items():
+        newest[dataset] = key
+    return newest
+
+
 def expired_keys(
     cloud_objects: dict[str, int],
     retention_days: dict[str, int],
     now: datetime,
 ) -> RetentionPlan:
-    """Делит объекты бэкапа на просроченные и непонятные."""
+    """Делит объекты бэкапа на просроченные и непонятные.
+
+    Последний снимок каждого набора в просроченные не попадает:
+    если загрузка набора остановилась, иначе в облаке не осталось бы
+    ни одной копии.
+    """
     plan = RetentionPlan()
+    newest = find_newest_keys(cloud_objects)
     for key in sorted(cloud_objects):
         parsed = parse_key(key)
         if parsed is None:
@@ -56,6 +78,8 @@ def expired_keys(
         days = retention_days.get(dataset)
         if days is None:
             plan.unknown.append(key)
+            continue
+        if newest.get(dataset) == key:
             continue
         if (now - moment).days >= days:
             plan.expired.append(key)

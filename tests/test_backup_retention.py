@@ -61,3 +61,26 @@ def test_keeps_unparsable_bronze_key() -> None:
 
     assert plan.expired == []
     assert plan.unknown == ["bronze/broken.json.gz"]
+
+
+def test_keeps_newest_snapshot_when_loading_stopped() -> None:
+    objects = {
+        "bronze/space_track/gp/2026-11-10T10-00-00Z.json.gz": 100,
+        "bronze/space_track/gp/2026-11-12T10-00-00Z.json.gz": 100,
+    }
+
+    plan = expired_keys(objects, {"gp": 2}, NOW)
+
+    assert plan.expired == [
+        "bronze/space_track/gp/2026-11-10T10-00-00Z.json.gz"
+    ]
+    assert plan.unknown == []
+
+
+def test_keeps_only_snapshot_of_dataset() -> None:
+    objects = {"bronze/space_track/decay/2026-10-01T10-00-00Z.json.gz": 100}
+
+    plan = expired_keys(objects, {"decay": 14}, NOW)
+
+    assert plan.expired == []
+    assert plan.unknown == []
