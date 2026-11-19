@@ -48,19 +48,22 @@ def download_datasets(
     uploader: SnapshotUploader | None = None,
     *,
     last_fetches: dict[str, datetime],
+    now: datetime | None = None,
 ) -> DownloadResult:
     """Скачивает наборы по источникам и сразу сохраняет каждый.
 
     Набор пропускается, если его окно запросов ещё не прошло.
     При отказе источника оставшиеся наборы этого источника
     не запрашиваются, второй источник загружается полностью.
+    Время можно передать аргументом, чтобы тесты не зависели
+    от текущего часа.
     """
     result = DownloadResult()
     timestamp = current_timestamp()
-    now = datetime.now(UTC)
+    current_time = now or datetime.now(UTC)
     for group, (folder, extension) in CELESTRAK_DATASETS.items():
         code = dataset_code(folder)
-        reason = skip_reason(code, now, last_fetches.get(code))
+        reason = skip_reason(code, current_time, last_fetches.get(code))
         if reason:
             result.skipped[folder] = reason
             continue
@@ -76,7 +79,7 @@ def download_datasets(
         upload_snapshot(result, uploader, folder, file_path, data_directory)
     for api_class, (folder, extension) in SPACE_TRACK_DATASETS.items():
         code = dataset_code(folder)
-        reason = skip_reason(code, now, last_fetches.get(code))
+        reason = skip_reason(code, current_time, last_fetches.get(code))
         if reason:
             result.skipped[folder] = reason
             continue

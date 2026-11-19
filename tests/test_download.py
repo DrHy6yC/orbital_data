@@ -1,6 +1,6 @@
 import re
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -18,6 +18,7 @@ CSV_BODY = b"OBJECT_NAME,OBJECT_ID\nISS (ZARYA),1998-067A\n"
 JSON_BODY = b'[{"NORAD_CAT_ID": "25544"}]'
 LOGIN_PATH = "/ajaxauth/login"
 QUERY_PREFIX = "/basicspacedata/query/class"
+NOW = datetime(2026, 11, 18, 18, 0, 0, tzinfo=UTC)
 
 
 class FakeUploader:
@@ -69,7 +70,7 @@ def test_downloads_and_saves_five_datasets(tmp_path: Path) -> None:
 
     celestrak, space_track = make_clients(handler)
     result = download_datasets(
-        celestrak, space_track, tmp_path, last_fetches={}
+        celestrak, space_track, tmp_path, last_fetches={}, now=NOW
     )
 
     assert list(result.datasets) == [
@@ -116,7 +117,7 @@ def test_keeps_space_track_when_celestrak_fails(tmp_path: Path) -> None:
 
     celestrak, space_track = make_clients(handler)
     result = download_datasets(
-        celestrak, space_track, tmp_path, last_fetches={}
+        celestrak, space_track, tmp_path, last_fetches={}, now=NOW
     )
 
     assert list(result.datasets) == [
@@ -148,7 +149,7 @@ def test_keeps_celestrak_when_space_track_fails(tmp_path: Path) -> None:
 
     celestrak, space_track = make_clients(handler)
     result = download_datasets(
-        celestrak, space_track, tmp_path, last_fetches={}
+        celestrak, space_track, tmp_path, last_fetches={}, now=NOW
     )
 
     assert list(result.datasets) == [
@@ -187,7 +188,7 @@ def test_uploads_every_dataset(tmp_path: Path) -> None:
     celestrak, space_track = make_clients(handler)
     uploader = FakeUploader()
     result = download_datasets(
-        celestrak, space_track, tmp_path, uploader, last_fetches={}
+        celestrak, space_track, tmp_path, uploader, last_fetches={}, now=NOW
     )
 
     assert result.errors == {}
@@ -211,7 +212,7 @@ def test_keeps_snapshot_when_upload_fails(tmp_path: Path) -> None:
     celestrak, space_track = make_clients(handler)
     uploader = FakeUploader(failing_prefix="space_track/gp")
     result = download_datasets(
-        celestrak, space_track, tmp_path, uploader, last_fetches={}
+        celestrak, space_track, tmp_path, uploader, last_fetches={}, now=NOW
     )
 
     assert list(result.errors) == ["upload:space_track/gp"]
@@ -241,7 +242,8 @@ def test_skips_dataset_inside_window(tmp_path: Path) -> None:
         celestrak,
         space_track,
         tmp_path,
-        last_fetches={"satcat": datetime.now(UTC)},
+        last_fetches={"satcat": NOW - timedelta(hours=1)},
+        now=NOW,
     )
 
     assert "space_track/satcat" in result.skipped
