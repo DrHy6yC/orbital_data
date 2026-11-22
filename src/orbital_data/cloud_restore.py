@@ -18,8 +18,8 @@ from botocore.client import BaseClient
 
 from orbital_data.backup_retention import (
     CLOUD_BRONZE_PREFIX,
-    GZIP_SUFFIX,
     parse_key,
+    snapshot_key,
 )
 from orbital_data.cloud_objects import (
     download_object,
@@ -66,14 +66,6 @@ def newest_keys(cloud_keys: list[str], dataset: str | None) -> list[str]:
     return [newest[name][1] for name in sorted(newest)]
 
 
-def rustfs_key(cloud_key: str) -> str:
-    """Убирает из ключа облака префикс bronze/ и суффикс .gz."""
-    key = cloud_key.removeprefix(CLOUD_BRONZE_PREFIX)
-    if key.endswith(GZIP_SUFFIX):
-        key = key[: -len(GZIP_SUFFIX)]
-    return key
-
-
 def restore_object(
     cloud: BaseClient,
     storage: BaseClient,
@@ -89,7 +81,7 @@ def restore_object(
     бакетов не могут перепутаться. Возвращает размер распакованного
     файла или None при ошибке.
     """
-    key = rustfs_key(cloud_key)
+    key = snapshot_key(cloud_key)
     stored = stored_checksum(
         cloud.head_object(Bucket=cloud_bucket, Key=cloud_key).get(
             "Metadata", {}

@@ -10,6 +10,9 @@
 Просроченные объекты bronze удаляются по окнам хранения
 BACKUP_KEEP_<НАБОР>_DAYS и только после успешной загрузки новых.
 
+Копии Bronze отмечаются в orbital.snapshot_copies со storage = 'yandex':
+ключ облака и размер сжатого объекта.
+
 Слои Silver и Gold не копируются: их можно пересобрать из Bronze.
 
 Защита от платных расходов: перед каждой загрузкой проверяется, что общий размер
@@ -44,6 +47,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import boto3
+import psycopg
 from boto3.s3.transfer import TransferConfig
 from botocore.client import BaseClient
 from botocore.config import Config
@@ -53,20 +57,28 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from orbital_data.backup_retention import (  # noqa: E402
+    CLOUD_BRONZE_PREFIX,
+    GZIP_SUFFIX,
     RetentionPlan,
+    cloud_bronze_copies,
     expired_keys,
+)
+from orbital_data.source_snapshots.registry import (  # noqa: E402
+    RegistryError,
+    connect,
+    existing_snapshot_keys,
+    save_remote_copy,
 )
 
 MIB = 1024 * 1024
 SOURCE_BUCKET = "bronze"
-CLOUD_BRONZE_PREFIX = "bronze/"
+CLOUD_STORAGE = "yandex"  # значение orbital.snapshot_copies.storage
 CLOUD_POSTGRES_PREFIX = "postgres/"
 SKIP_PREFIX = "_healthcheck/"  # служебные объекты проверки, их не копируем
 # Объекты до 64 МБ загружаются одним запросом (меньше операций PUT).
 UPLOAD_CONFIG = TransferConfig(
     multipart_threshold=64 * MIB, multipart_chunksize=64 * MIB
 )
-GZIP_SUFFIX = ".gz"
 COMPRESS_LEVEL = 9
 CHUNK_SIZE = 1024 * 1024
 
@@ -246,6 +258,49 @@ def delete_expired(cloud: BaseClient, bucket: str, expired: list[str]) -> bool:
     return ok
 
 
+def open_registry() -> psycopg.Connection | None:
+    """Открывает базу метаданных; без неё бэкап продолжается."""
+    try:
+        return connect()
+    except (RegistryError, psycopg.Error) as error:
+        print(f"метаданные: ошибка — {error}")
+        return None
+
+
+def mark_cloud_copies(copies: dict[str, tuple[str, int]]) -> None:
+    """Отмечает копии Bronze в облаке в snapshot_copies.
+
+    Снимок ищется по ключу без bronze/ и .gz, а записывается ключ
+    облака и размер сжатого объекта. Ошибка базы не прерывает бэкап:
+    файлы уже в облаке, отметку можно дописать следующим запуском.
+    """
+    if not copies:
+        return
+    connection = open_registry()
+    if connection is None:
+        return
+    added = 0
+    try:
+        known = existing_snapshot_keys(connection, list(copies))
+        for snapshot_name, (cloud_key, size) in sorted(copies.items()):
+            if snapshot_name not in known:
+                continue
+            try:
+                if save_remote_copy(
+                    connection, CLOUD_STORAGE, snapshot_name, cloud_key, size
+                ):
+                    added += 1
+            except psycopg.Error as error:
+                print(f"метаданные: ошибка — {error}")
+    finally:
+        connection.close()
+    print(
+        f"отметки в облаке: добавлено {added}, "
+        f"уже было {len(known) - added}, "
+        f"без снимка {len(copies) - len(known)}"
+    )
+
+
 def backup_bronze(
     local: BaseClient,
     cloud: BaseClient,
@@ -275,6 +330,8 @@ def backup_bronze(
         f"Bronze: объектов локально {len(local_objects)}, "
         f"к копированию {len(todo)}"
     )
+    copies = cloud_bronze_copies(cloud_all, expired)
+    done = True
     with tempfile.TemporaryDirectory() as temp_directory:
         for key, size in todo:
             if is_dry_run:
@@ -287,13 +344,15 @@ def backup_bronze(
                 packed_size = compress_file(downloaded, packed)
             except (ClientError, BotoCoreError, OSError) as error:
                 print(f"[ОШИБКА] {key}: {error}")
-                return total, False
+                done = False
+                break
             if total + packed_size > settings["max_bytes"]:
                 print(
                     f"[СТОП] {key}: бакет превысил бы лимит "
                     f"{settings['max_bytes'] // MIB} МБ"
                 )
-                return total, False
+                done = False
+                break
             cloud_key = CLOUD_BRONZE_PREFIX + key + GZIP_SUFFIX
             try:
                 cloud.upload_file(
@@ -305,15 +364,19 @@ def backup_bronze(
                 )
             except (ClientError, BotoCoreError) as error:
                 print(f"[ОШИБКА] {key}: {error}")
-                return total, False
+                done = False
+                break
             stats["put"] += 1
             stats["bytes"] += packed_size
             total += packed_size
+            copies[key] = (cloud_key, packed_size)
             print(
                 f"[OK] {key} -> {cloud_key} "
                 f"({size / MIB:.2f} МБ -> {packed_size / MIB:.2f} МБ)"
             )
-    return total, True
+    if not is_dry_run:
+        mark_cloud_copies(copies)
+    return total, done
 
 
 def backup_postgres(

@@ -11,7 +11,6 @@ from orbital_data.cloud_restore import (
     newest_keys,
     parse_dataset,
     restore_object,
-    rustfs_key,
 )
 
 PAYLOAD = b"norad_id,epoch\n25544,2026-11-17\n"
@@ -91,10 +90,6 @@ def test_parse_dataset_keeps_value() -> None:
 def test_parse_dataset_rejects_wrong_format(value: str) -> None:
     with pytest.raises(ValueError):
         parse_dataset(value)
-
-
-def test_rustfs_key_strips_prefix_and_suffix() -> None:
-    assert rustfs_key(CLOUD_KEY) == STORAGE_KEY
 
 
 def test_dataset_of_returns_source_and_dataset() -> None:

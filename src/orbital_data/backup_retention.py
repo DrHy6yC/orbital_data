@@ -20,6 +20,18 @@ class RetentionPlan:
     unknown: list[str] = field(default_factory=list)
 
 
+def snapshot_key(cloud_key: str) -> str:
+    """Возвращает ключ снимка по ключу объекта облака.
+
+    Облачная копия лежит с префиксом bronze/ и суффиксом .gz,
+    у снимка в хранилище и в базе ни того, ни другого нет.
+    """
+    key = cloud_key.removeprefix(CLOUD_BRONZE_PREFIX)
+    if key.endswith(GZIP_SUFFIX):
+        key = key[: -len(GZIP_SUFFIX)]
+    return key
+
+
 def parse_key(key: str) -> tuple[str, datetime] | None:
     """Возвращает код набора и время снимка из ключа бэкапа."""
     if not key.startswith(CLOUD_BRONZE_PREFIX):
@@ -37,6 +49,25 @@ def parse_key(key: str) -> tuple[str, datetime] | None:
     except ValueError:
         return None
     return dataset, moment.replace(tzinfo=UTC)
+
+
+def cloud_bronze_copies(
+    cloud_objects: dict[str, int], expired: set[str]
+) -> dict[str, tuple[str, int]]:
+    """Возвращает облачные копии Bronze: ключ снимка и ключ облака с размером.
+
+    Просроченные объекты не попадают: их удалит тот же запуск бэкапа,
+    и отметка вела бы на отсутствующий объект. Дампы `postgres/`
+    не попадают: у них нет снимка в базе.
+    """
+    copies = {}
+    for cloud_key, size in sorted(cloud_objects.items()):
+        if not cloud_key.startswith(CLOUD_BRONZE_PREFIX):
+            continue
+        if cloud_key in expired:
+            continue
+        copies[snapshot_key(cloud_key)] = (cloud_key, size)
+    return copies
 
 
 def find_newest_keys(cloud_objects: dict[str, int]) -> dict[str, str]:

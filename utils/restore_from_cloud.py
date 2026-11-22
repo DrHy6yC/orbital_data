@@ -33,6 +33,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
+from orbital_data.backup_retention import snapshot_key  # noqa: E402
 from orbital_data.cloud_objects import (  # noqa: E402
     format_size,
     list_cloud_keys,
@@ -44,7 +45,6 @@ from orbital_data.cloud_restore import (  # noqa: E402
     newest_keys,
     parse_dataset,
     restore_object,
-    rustfs_key,
 )
 from orbital_data.s3_access import (  # noqa: E402
     StorageError,
@@ -111,7 +111,7 @@ def show_plan(
     for cloud_key in cloud_keys:
         head = cloud.head_object(Bucket=cloud_bucket, Key=cloud_key)
         packed = head["ContentLength"]
-        print(f"восстановил бы: {BRONZE_BUCKET}/{rustfs_key(cloud_key)}")
+        print(f"восстановил бы: {BRONZE_BUCKET}/{snapshot_key(cloud_key)}")
         print(f"  из {cloud_key}, сжато {format_size(packed)}")
 
 
@@ -160,7 +160,7 @@ def main() -> None:
     print(f"Объектов к восстановлению: {len(selected)}")
     connection = open_registry()
     checksums = read_checksums(
-        connection, [rustfs_key(key) for key in selected]
+        connection, [snapshot_key(key) for key in selected]
     )
 
     ok = 0
@@ -189,7 +189,7 @@ def main() -> None:
                 errors += 1
                 continue
             ok += 1
-            mark_restored(connection, rustfs_key(cloud_key), size)
+            mark_restored(connection, snapshot_key(cloud_key), size)
 
     if connection is not None:
         connection.close()

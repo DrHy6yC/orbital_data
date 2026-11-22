@@ -1,6 +1,11 @@
 from datetime import UTC, datetime
 
-from orbital_data.backup_retention import expired_keys, parse_key
+from orbital_data.backup_retention import (
+    cloud_bronze_copies,
+    expired_keys,
+    parse_key,
+    snapshot_key,
+)
 
 NOW = datetime(2026, 11, 17, 18, 0, 0, tzinfo=UTC)
 
@@ -28,6 +33,66 @@ def test_ignores_key_with_extra_level() -> None:
 
 def test_ignores_key_without_time() -> None:
     assert parse_key("bronze/space_track/gp/snapshot.json.gz") is None
+
+
+def test_snapshot_key_strips_prefix_and_suffix() -> None:
+    key = "bronze/space_track/gp/2026-11-17T12-25-52Z.json.gz"
+
+    assert snapshot_key(key) == "space_track/gp/2026-11-17T12-25-52Z.json"
+
+
+def test_snapshot_key_keeps_key_without_suffix() -> None:
+    key = "bronze/celestrak/gp_stations/2026-11-17T12-25-52Z.csv"
+
+    assert (
+        snapshot_key(key) == "celestrak/gp_stations/2026-11-17T12-25-52Z.csv"
+    )
+
+
+def test_snapshot_key_does_not_touch_dump_prefix() -> None:
+    key = "postgres/orbital_data_2026-11-19T08-38-59Z.sql.gz"
+
+    assert (
+        snapshot_key(key) == "postgres/orbital_data_2026-11-19T08-38-59Z.sql"
+    )
+
+
+def test_cloud_copies_keep_bronze_objects() -> None:
+    objects = {
+        "bronze/celestrak/gp_stations/2026-11-17T17-55-54Z.csv.gz": 995,
+        "bronze/space_track/gp/2026-11-17T17-55-54Z.json.gz": 11_650_000,
+    }
+
+    copies = cloud_bronze_copies(objects, set())
+
+    assert copies == {
+        "celestrak/gp_stations/2026-11-17T17-55-54Z.csv": (
+            "bronze/celestrak/gp_stations/2026-11-17T17-55-54Z.csv.gz",
+            995,
+        ),
+        "space_track/gp/2026-11-17T17-55-54Z.json": (
+            "bronze/space_track/gp/2026-11-17T17-55-54Z.json.gz",
+            11_650_000,
+        ),
+    }
+
+
+def test_cloud_copies_skip_expired_objects() -> None:
+    objects = {
+        "bronze/space_track/gp/2026-11-10T10-00-00Z.json.gz": 100,
+        "bronze/space_track/gp/2026-11-17T17-00-00Z.json.gz": 100,
+    }
+    expired = {"bronze/space_track/gp/2026-11-10T10-00-00Z.json.gz"}
+
+    copies = cloud_bronze_copies(objects, expired)
+
+    assert list(copies) == ["space_track/gp/2026-11-17T17-00-00Z.json"]
+
+
+def test_cloud_copies_skip_dumps() -> None:
+    objects = {"postgres/orbital_data_2026-11-19T08-38-59Z.sql.gz": 10}
+
+    assert cloud_bronze_copies(objects, set()) == {}
 
 
 def test_marks_old_snapshot_as_expired() -> None:

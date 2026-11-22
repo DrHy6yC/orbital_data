@@ -110,6 +110,47 @@ def snapshot_checksums(
         return {row[0]: row[1] for row in cursor.fetchall()}
 
 
+def existing_snapshot_keys(
+    connection: psycopg.Connection, object_keys: list[str]
+) -> set[str]:
+    """Возвращает ключи снимков, которые есть в базе."""
+    if not object_keys:
+        return set()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT storage_path FROM orbital.snapshots "
+            "WHERE storage_path = ANY(%s)",
+            (object_keys,),
+        )
+        return {row[0] for row in cursor.fetchall()}
+
+
+def save_remote_copy(
+    connection: psycopg.Connection,
+    storage: str,
+    snapshot_key: str,
+    object_key: str,
+    file_size_bytes: int,
+) -> bool:
+    """Отмечает копию снимка в другом хранилище.
+
+    Снимок ищется по ключу основного хранилища, а записывается ключ
+    и размер этой копии: у копии в облаке другой ключ (с `bronze/`
+    и `.gz`) и другой размер (сжатый). Повторная запись ничего
+    не меняет.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO orbital.snapshot_copies (snapshot_id, "
+            "storage, object_key, file_size_bytes, status, copied_at) "
+            "SELECT snapshot_id, %s, %s, %s, 'ok', now() "
+            "FROM orbital.snapshots WHERE storage_path = %s "
+            "ON CONFLICT (snapshot_id, storage) DO NOTHING",
+            (storage, object_key, file_size_bytes, snapshot_key),
+        )
+        return cursor.rowcount > 0
+
+
 def ensure_primary_copy(
     connection: psycopg.Connection, object_key: str, file_size_bytes: int
 ) -> bool:
@@ -120,16 +161,13 @@ def ensure_primary_copy(
     и брать её неоткуда. Если снимка нет в snapshots, ничего
     не пишется.
     """
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "INSERT INTO orbital.snapshot_copies (snapshot_id, "
-            "storage, object_key, file_size_bytes, status, copied_at) "
-            "SELECT snapshot_id, %s, %s, %s, 'ok', now() "
-            "FROM orbital.snapshots WHERE storage_path = %s "
-            "ON CONFLICT (snapshot_id, storage) DO NOTHING",
-            (PRIMARY_STORAGE, object_key, file_size_bytes, object_key),
-        )
-        return cursor.rowcount > 0
+    return save_remote_copy(
+        connection,
+        PRIMARY_STORAGE,
+        object_key,
+        object_key,
+        file_size_bytes,
+    )
 
 
 def last_fetch_times(connection: psycopg.Connection) -> dict[str, datetime]:
