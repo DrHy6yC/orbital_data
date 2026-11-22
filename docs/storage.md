@@ -144,7 +144,8 @@ postgres/<база>_<время UTC>.sql.gz
 
 ### 7.3. Yandex Object Storage
 
-Бесплатный уровень по данным официальной страницы акций Yandex Cloud
+Бесплатный уровень по
+[правилам тарификации Object Storage](https://yandex.cloud/ru/docs/storage/pricing#rules)
 (сверять с актуальной версией): 1 ГБ хранения, 10 000 операций
 PUT, POST, PATCH, LIST и 100 000 операций GET, HEAD, OPTIONS в месяц.
 
