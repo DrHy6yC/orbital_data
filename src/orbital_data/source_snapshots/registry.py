@@ -5,6 +5,7 @@
 """
 
 import os
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -123,6 +124,52 @@ def existing_snapshot_keys(
             (object_keys,),
         )
         return {row[0] for row in cursor.fetchall()}
+
+
+def snapshot_sizes(connection: psycopg.Connection) -> dict[str, int]:
+    """Возвращает размеры снимков по ключам основного хранилища."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT storage_path, file_size_bytes FROM orbital.snapshots"
+        )
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
+
+@dataclass
+class SnapshotDiff:
+    """Расхождения между объектами хранилища и таблицей snapshots."""
+
+    without_row: list[str] = field(default_factory=list)
+    without_object: list[str] = field(default_factory=list)
+    size_mismatch: list[tuple[str, int, int]] = field(default_factory=list)
+
+    @property
+    def has_differences(self) -> bool:
+        """Есть ли хотя бы одно расхождение."""
+        return bool(
+            self.without_row or self.without_object or self.size_mismatch
+        )
+
+
+def compare_snapshots(
+    objects: dict[str, int], snapshots: dict[str, int]
+) -> SnapshotDiff:
+    """Сравнивает объекты бакета bronze с записями snapshots.
+
+    objects — ключи и размеры объектов хранилища, snapshots — ключи
+    и размеры из orbital.snapshots. Ключ объекта совпадает
+    с storage_path снимка.
+    """
+    diff = SnapshotDiff()
+    for key in sorted(objects):
+        if key not in snapshots:
+            diff.without_row.append(key)
+        elif objects[key] != snapshots[key]:
+            diff.size_mismatch.append((key, objects[key], snapshots[key]))
+    for key in sorted(snapshots):
+        if key not in objects:
+            diff.without_object.append(key)
+    return diff
 
 
 def save_remote_copy(

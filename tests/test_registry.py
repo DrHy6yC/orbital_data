@@ -5,6 +5,7 @@ import pytest
 
 from orbital_data.source_snapshots.registry import (
     RegistryError,
+    compare_snapshots,
     define_status,
     file_checksum,
     parse_fetched_at,
@@ -54,3 +55,44 @@ def test_checksum_matches_known_value(tmp_path: Path) -> None:
 )
 def test_defines_status(saved: int, errors: int, expected: str) -> None:
     assert define_status(saved, errors) == expected
+
+
+def test_compare_snapshots_finds_object_without_row() -> None:
+    key = "celestrak/gp_stations/2026-11-22T07-33-20Z.csv"
+
+    diff = compare_snapshots({key: 10}, {})
+
+    assert diff.without_row == [key]
+    assert diff.without_object == []
+    assert diff.size_mismatch == []
+    assert diff.has_differences
+
+
+def test_compare_snapshots_finds_row_without_object() -> None:
+    key = "celestrak/gp_stations/2026-11-22T07-33-20Z.csv"
+
+    diff = compare_snapshots({}, {key: 10})
+
+    assert diff.without_row == []
+    assert diff.without_object == [key]
+    assert diff.size_mismatch == []
+    assert diff.has_differences
+
+
+def test_compare_snapshots_finds_size_mismatch() -> None:
+    key = "celestrak/gp_stations/2026-11-22T07-33-20Z.csv"
+
+    diff = compare_snapshots({key: 11}, {key: 10})
+
+    assert diff.without_row == []
+    assert diff.without_object == []
+    assert diff.size_mismatch == [(key, 11, 10)]
+    assert diff.has_differences
+
+
+def test_compare_snapshots_reports_no_differences() -> None:
+    key = "celestrak/gp_stations/2026-11-22T07-33-20Z.csv"
+
+    diff = compare_snapshots({key: 10}, {key: 10})
+
+    assert not diff.has_differences
