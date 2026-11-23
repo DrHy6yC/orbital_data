@@ -309,6 +309,18 @@ uv run --env-file .env python utils/check_s3.py
 uv run --env-file .env python utils/check_s3.py --list
 ```
 
+Сверить объекты бакета `bronze` с метаданными в `orbital.snapshots`
+(только чтение):
+
+```bash
+uv run --env-file .env python utils/check_snapshots.py
+```
+
+Скрипт печатает объекты без строки в базе, строки без объекта и
+расхождения размеров; код возврата 1 — расхождения есть. Порядок
+переезда, после которого сверка нужна в первую очередь, описан
+в [docs/storage.md](docs/storage.md), раздел 8.3.
+
 ### 7.10. Проверка подключения к источникам
 
 Проверить доступность CelesTrak и Space-Track:
